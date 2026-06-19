@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Paramètres</h1>
+<form action="/run" method="post" class="grid">
+  <label>Origine <input name="origin" value="{{ settings.origin_airport }}"></label>
+  <label>Date fin <input name="date_to" value="{{ settings.date_to }}"></label>
+  <label>Nuits min <input name="min_nights" value="{{ settings.min_nights }}"></label>
+  <label>Nuits max <input name="max_nights" value="{{ settings.max_nights }}"></label>
+  <label>Prix max <input name="max_price" value="{{ settings.max_roundtrip_price_eur }}"></label>
+  <label>Air max h <input name="max_air_time" value="{{ settings.max_air_time_hours }}"></label>
+  <label>Escales max h <input name="max_layover" value="{{ settings.max_layover_hours }}"></label>
+  <label>Email <input name="email_to" value="{{ settings.email_to }}"></label>
+  <button type="submit">Sauver et lancer</button>
+</form>
+{% endblock %}

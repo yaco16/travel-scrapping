@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Résultats</h1>
+<form action="/email" method="post"><button type="submit">Envoyer email</button></form>
+<table>
+  <tr><th>Destination</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Airlines</th><th>Source</th><th>Confiance</th><th>Warnings</th><th>Lien</th></tr>
+  {% for deal in deals %}
+  <tr>
+    <td><a href="/deal/{{ deal.id }}">{{ deal.destination_city or deal.destination_airport }}</a></td>
+    <td>{{ deal.outbound_date }} - {{ deal.return_date }}</td>
+    <td>{{ deal.nights }}</td>
+    <td>{{ "%.2f"|format(deal.total_price_eur) }} EUR</td>
+    <td>{{ deal.airlines_json }}</td>
+    <td>{{ deal.source }}</td>
+    <td>{{ deal.confidence }}</td>
+    <td>{{ deal.warnings_json }}</td>
+    <td>{% if deal.booking_url %}<a href="{{ deal.booking_url }}" rel="noreferrer">Réserver</a>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% if not deals %}<p>Aucun deal accepté.</p>{% endif %}
+{% endblock %}

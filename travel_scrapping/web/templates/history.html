@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Historique</h1>
+<table>
+  <tr><th>ID</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th></tr>
+  {% for run in runs %}
+  <tr><td>{{ run.id }}</td><td>{{ run.status }}</td><td>{{ run.accepted_count }}</td><td>{{ run.rejected_count }}</td><td>{{ run.cheapest_price_eur or "-" }}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
