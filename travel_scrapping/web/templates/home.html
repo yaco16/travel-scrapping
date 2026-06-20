@@ -8,7 +8,7 @@
   </div>
 </section>
 
-{% for warning in warnings %}
+{% for warning in warnings if "Travelpayouts désactivé" not in warning %}
 <p class="warning compact">{{ warning }}</p>
 {% endfor %}
 
@@ -21,7 +21,7 @@
       </div>
     </div>
     <p class="summary">{{ configuration_summary }}</p>
-    <form action="/run" method="post" class="form-grid">
+    <form action="/run" method="post" class="form-grid" data-run-form>
       <label>Origine <input name="origin_airport" value="{{ default_config.origin_airport }}"></label>
       <label>Date départ min <input name="depart_date_min" type="date" value="{{ default_config.search_start_date }}"></label>
       <label>Date départ max <input name="depart_date_max" type="date" value="{{ default_config.search_end_date }}"></label>
@@ -30,7 +30,7 @@
       <label>Prix max <input name="max_price" value="{{ default_config.budget_eur }}"></label>
       <label>Correspondances max <input name="max_stops" value="{{ default_config.max_stops }}"></label>
       <input name="modes" type="hidden" value="flight">
-      <button type="submit">Lancer recherche</button>
+      <button type="submit" data-run-submit>Lancer recherche</button>
     </form>
   </section>
 
@@ -52,7 +52,7 @@
     </dl>
     <div class="button-row">
       <a class="button" href="/results?run_id={{ run.id }}">Voir les résultats</a>
-      <form action="/run" method="post" class="inline-form">
+      <form action="/run" method="post" class="inline-form" data-run-form>
         <input name="origin_airport" type="hidden" value="{{ run_config.origin_airport }}">
         <input name="depart_date_min" type="hidden" value="{{ run_config.search_start_date }}">
         <input name="depart_date_max" type="hidden" value="{{ run_config.search_end_date }}">
@@ -61,7 +61,7 @@
         <input name="max_price" type="hidden" value="{{ run_config.budget_eur }}">
         <input name="max_stops" type="hidden" value="{{ run_config.max_stops }}">
         <input name="modes" type="hidden" value="flight">
-        <button type="submit" class="secondary">Relancer avec cette configuration</button>
+        <button type="submit" class="secondary" data-run-submit>Relancer avec cette configuration</button>
       </form>
     </div>
     {% else %}
@@ -92,4 +92,16 @@
     {% endif %}
   </div>
 </section>
+
+<script>
+  document.querySelectorAll("[data-run-form]").forEach((form) => {
+    form.addEventListener("submit", () => {
+      const button = form.querySelector("[data-run-submit]");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Lancement...";
+      }
+    });
+  });
+</script>
 {% endblock %}
