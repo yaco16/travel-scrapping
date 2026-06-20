@@ -5,19 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-FRENCH_CITY_BY_IATA = {
-    "BTS": "Bratislava",
-    "VCE": "Venise",
-    "SVQ": "Séville",
-    "BCN": "Barcelone",
-    "VIE": "Vienne",
-    "BRU": "Bruxelles",
-    "PRG": "Prague",
-    "MAD": "Madrid",
-    "FCO": "Rome",
-    "CIA": "Rome",
-    "MXP": "Milan",
-}
+from travel_scrapping.airports import destination_display_name
 
 WARNING_LABELS = {
     "cached or indicative fare; verify before booking": "Prix indicatif : à vérifier avant réservation",
@@ -44,14 +32,10 @@ def destination_display(deal: Any) -> str:
     display_name = getattr(deal, "destination_display_name", None)
     if display_name:
         return str(display_name)
-    city = getattr(deal, "destination_city", None)
-    airport = str(getattr(deal, "destination_airport", "") or "")
-    code = airport.upper()
-    if code in FRENCH_CITY_BY_IATA:
-        return FRENCH_CITY_BY_IATA[code]
-    if city:
-        return str(city)
-    return f"{code} inconnu" if code else "Destination inconnue"
+    return destination_display_name(
+        getattr(deal, "destination_airport", None),
+        getattr(deal, "destination_city", None),
+    )
 
 
 def short_date(value: date | datetime | str | None) -> str:

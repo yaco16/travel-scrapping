@@ -101,6 +101,22 @@ class ProviderStatusRow(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class AirportMetadata(Base):
+    __tablename__ = "airport_metadata"
+
+    iata: Mapped[str] = mapped_column(String(8), primary_key=True)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    city_fr: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    airport_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(32))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime)
+    raw_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 def engine_from_settings(settings: Settings):
     if settings.database_url.startswith("sqlite:///"):
         Path(settings.database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)

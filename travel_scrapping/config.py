@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     top_results_limit: int = 50
 
     serpapi_api_key: str = ""
+    api_ninjas_api_key: str = ""
     travelpayouts_token: str = ""
     travelpayouts_marker: str = ""
     kiwi_tequila_api_key: str = ""
@@ -80,6 +81,7 @@ class Settings(BaseSettings):
 
 SECRET_FIELDS = {
     "serpapi_api_key",
+    "api_ninjas_api_key",
     "travelpayouts_token",
     "travelpayouts_marker",
     "kiwi_tequila_api_key",

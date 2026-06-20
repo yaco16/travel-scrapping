@@ -13,6 +13,8 @@ cp .env.example .env
 
 Fill `.env` with available keys. Keep `.env` untracked.
 
+`API_NINJAS_API_KEY` is optional. When set, airport IATA codes are enriched through API Ninjas Airports API and cached locally. Without it, the app keeps using local French city fallback and never fails startup.
+
 ## Dashboard
 
 ```bash
@@ -27,6 +29,8 @@ Open `http://127.0.0.1:8000`.
 .venv/bin/python -m travel_scrapping.cli config
 .venv/bin/python -m travel_scrapping.cli search
 .venv/bin/python -m travel_scrapping.cli top
+.venv/bin/python -m travel_scrapping.cli airports-refresh
+.venv/bin/python -m travel_scrapping.cli airports-refresh --iata VCE
 .venv/bin/python -m travel_scrapping.cli sqlite-diagnostics
 .venv/bin/python -m travel_scrapping.cli search --send-email
 ```
@@ -43,6 +47,8 @@ sqlite3 data/travel_scrapping.db "select origin_iata, destination_iata, departur
 
 Dashboard: `http://127.0.0.1:8000/sqlite`.
 
+Airport metadata is cached in SQLite table `airport_metadata` with IATA, city, French display city, airport name, country, timezone, coordinates, source, fetch timestamp and raw payload. `airports-refresh --force` bypasses cache and refreshes from API when `API_NINJAS_API_KEY` exists.
+
 ## Tests
 
 ```bash
@@ -55,6 +61,8 @@ Dashboard: `http://127.0.0.1:8000/sqlite`.
 SerpAPI Google Flights is the main live source when `SERPAPI_API_KEY` exists. Travelpayouts widens discovery and is marked medium/low confidence, especially without marker/deeplink support. Playwright is a safe disabled skeleton: no CAPTCHA bypass, no login bypass, no proxy rotation, no rate-limit evasion.
 
 Missing provider keys skip providers instead of crashing.
+
+API Ninjas Airports enriches airport metadata when `API_NINJAS_API_KEY` exists. The key is not required; missing key falls back to local mappings such as `VCE -> Venise`, `SVQ -> Séville`, `BCN -> Barcelone`.
 
 ## Email
 

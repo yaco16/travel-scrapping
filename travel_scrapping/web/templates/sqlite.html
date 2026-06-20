@@ -12,7 +12,7 @@
     <tr>
       <td>{{ row.id }}</td>
       <td>{{ row.run_id if row.run_id is not none else "Non disponible" }}</td>
-      <td>{{ row.origin_iata or "Origine inconnue" }}-{{ row.destination_iata or "Destination inconnue" }}</td>
+      <td>{{ row.origin_iata or "Origine inconnue" }}-{{ row.destination_display_name or "Destination inconnue" }}</td>
       <td>{% if row.departure_date and row.return_date %}{{ row.departure_date|short_date }} - {{ row.return_date|short_date }}{% else %}Dates non disponibles{% endif %}</td>
       <td>{{ row.nights if row.nights is not none else "Non disponible" }}</td>
       <td>{{ row.price|price_display }} {{ row.currency or "" }}</td>
@@ -31,7 +31,7 @@
     {% for row in variations %}
     <tr>
       <td>{{ row.origin_iata or "Non disponible" }}</td>
-      <td>{{ row.destination_iata or "Non disponible" }}</td>
+      <td>{{ row.destination_display_name or "Non disponible" }}</td>
       <td>{{ row.departure_date|short_date }}</td>
       <td>{{ row.return_date|short_date }}</td>
       <td>{{ row.nights if row.nights is not none else "Non disponible" }}</td>

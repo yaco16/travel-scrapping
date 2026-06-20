@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% if deal %}
-<h1>{{ deal.destination_airport }}</h1>
+<h1>{{ deal.destination_display_name or deal|destination_display }}</h1>
 <p>{{ deal.outbound_date }} - {{ deal.return_date }} · {{ deal.total_price_eur }} EUR · {{ deal.source }}</p>
 <h2>Historique prix</h2>
 <ul>{% for obs in history %}<li>{{ obs.observed_at }} · {{ obs.price_eur }} EUR · {{ obs.source }}</li>{% endfor %}</ul>

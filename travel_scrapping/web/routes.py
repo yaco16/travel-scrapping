@@ -14,6 +14,7 @@ from travel_scrapping.config import get_settings, safe_settings_dict
 from travel_scrapping.db import Deal, PriceObservation, SearchRun, init_db, session_scope
 from travel_scrapping.email.brevo import send_deals_email
 from travel_scrapping.search.engine import run_search_sync
+from travel_scrapping.airports import resolve_airport
 from travel_scrapping.web import presentation
 
 templates = Jinja2Templates(directory="travel_scrapping/web/templates")
@@ -77,7 +78,9 @@ def results(request: Request):
         run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
         deals = [deal for deal in list(run.deals) if valid_display_deal(deal, settings)] if run else []
         for deal in deals:
-            deal.destination_display_name = presentation.destination_display(deal)  # type: ignore[attr-defined]
+            deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
+                deal.destination_airport, settings, session
+            ).info.display_name
         return templates.TemplateResponse(
             request,
             "results.html",
@@ -121,6 +124,9 @@ def deal_detail(request: Request, deal_id: int):
         deal = session.get(Deal, deal_id)
         history = []
         if deal:
+            deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
+                deal.destination_airport, settings, session
+            ).info.display_name
             route_key = f"{deal.origin_airport}-{deal.destination_airport}:{deal.outbound_date}:{deal.return_date}"
             history = list(session.scalars(select(PriceObservation).where(PriceObservation.route_key == route_key)))
         return templates.TemplateResponse(
@@ -138,6 +144,10 @@ def sqlite_diagnostics(request: Request):
         runs_count = session.query(SearchRun).count()
         observations_count = session.query(PriceObservation).count()
         latest = list(session.scalars(select(PriceObservation).order_by(PriceObservation.id.desc()).limit(20)))
+        for row in latest:
+            row.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
+                row.destination_iata, settings, session
+            ).info.display_name
         variations = session.execute(
             select(
                 PriceObservation.origin_iata,
@@ -158,6 +168,20 @@ def sqlite_diagnostics(request: Request):
             .having(func.count(PriceObservation.id) > 1)
             .limit(20)
         ).all()
+        variation_rows = []
+        for row in variations:
+            variation_rows.append(
+                {
+                    "origin_iata": row.origin_iata,
+                    "destination_display_name": resolve_airport(
+                        row.destination_iata, settings, session
+                    ).info.display_name,
+                    "departure_date": row.departure_date,
+                    "return_date": row.return_date,
+                    "nights": row.nights,
+                    "source": row.source,
+                }
+            )
         return templates.TemplateResponse(
             request,
             "sqlite.html",
@@ -165,6 +189,6 @@ def sqlite_diagnostics(request: Request):
                 "runs_count": runs_count,
                 "observations_count": observations_count,
                 "latest": latest,
-                "variations": variations,
+                "variations": variation_rows,
             },
         )

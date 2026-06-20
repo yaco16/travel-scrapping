@@ -6,6 +6,7 @@ import json
 import typer
 from sqlalchemy import func, select
 
+from travel_scrapping.airports import collect_observation_iata_codes, resolve_airport
 from travel_scrapping.config import get_settings, safe_settings_dict
 from travel_scrapping.db import PriceObservation, SearchRun, init_db, session_scope
 from travel_scrapping.email.brevo import send_deals_email
@@ -92,6 +93,31 @@ def sqlite_diagnostics() -> None:
                 f"nights={row.nights} source={row.source} count={row.count} "
                 f"min={row.min_price} max={row.max_price}"
             )
+
+
+@app.command("airports-refresh")
+def airports_refresh(iata: str | None = None, force: bool = False) -> None:
+    settings = get_settings()
+    factory = init_db(settings)
+    counts = {"cache": 0, "api": 0, "fallback": 0, "unknown": 0}
+    with session_scope(factory) as session:
+        codes = [iata.upper()] if iata else collect_observation_iata_codes(session, settings.origin_airport)
+        for code in codes:
+            result = resolve_airport(code, settings, session, force=force)
+            if result.cache_hit:
+                counts["cache"] += 1
+            elif result.info.source == "api_ninjas":
+                counts["api"] += 1
+            elif result.info.source == "fallback":
+                counts["fallback"] += 1
+            else:
+                counts["unknown"] += 1
+            typer.echo(f"{result.info.iata}: {result.info.display_name} ({result.info.source})")
+    typer.echo(f"total codes={len(codes)}")
+    typer.echo(f"trouvés via cache={counts['cache']}")
+    typer.echo(f"trouvés via API={counts['api']}")
+    typer.echo(f"fallback={counts['fallback']}")
+    typer.echo(f"inconnus={counts['unknown']}")
 
 
 if __name__ == "__main__":
