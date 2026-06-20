@@ -106,11 +106,22 @@ def diagnostics_context(settings, session, run: SearchRun | None = None) -> dict
     flixbus_status = latest_statuses.get("flixbus") or latest_statuses.get("flixbus_rapidapi")
     raw_total = sum(int(status.raw_count or 0) for status in latest_statuses.values() if status.enabled)
     normalized_total = sum(int(status.normalized_count or 0) for status in latest_statuses.values() if status.enabled)
+    enabled_statuses = [status for status in latest_statuses.values() if status.enabled]
+    attempted_statuses = [status for status in enabled_statuses if status.attempted]
     accepted_total = int(run.accepted_count or 0) if run else 0
     rejected_total = int(run.rejected_count or 0) if run else 0
     reasons = [status.main_rejection_reason for status in latest_statuses.values() if status.main_rejection_reason]
     main_reason = reasons[0] if reasons else "raison non disponible"
-    if raw_total == 0:
+    serpapi_status = latest_statuses.get("serpapi_google_flights_deals") or latest_statuses.get("serpapi")
+    if not enabled_statuses or not attempted_statuses:
+        no_offer_message = "Aucun fournisseur actif pour ce run. Vérifie les modes et les clés API."
+        if serpapi_status and not serpapi_status.enabled:
+            no_offer_message = "SerpApi désactivé : clé absente ou non lue."
+    elif serpapi_status and serpapi_status.attempted and serpapi_status.http_status and serpapi_status.http_status != 200:
+        no_offer_message = f"SerpApi appelé, statut HTTP {serpapi_status.http_status}."
+    elif serpapi_status and serpapi_status.attempted and int(serpapi_status.raw_count or 0) == 0:
+        no_offer_message = "SerpApi appelé, mais 0 offre brute reçue."
+    elif raw_total == 0:
         no_offer_message = "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs."
     elif rejected_total:
         no_offer_message = f"Aucune offre exploitable trouvée. {rejected_total} offres rejetées : {main_reason}."
@@ -163,6 +174,10 @@ def google_flight_deals_context(statuses: dict[str, ProviderStatusRow]) -> dict[
         "accepted_count": int(status.accepted_count or 0) if status else 0,
         "rejected_count": int(status.rejected_count or 0) if status else 0,
         "main_rejection_reason": status.main_rejection_reason if status else None,
+        "enabled": bool(status.enabled) if status else False,
+        "key_present": bool(status.key_present) if status else False,
+        "attempted": bool(status.attempted) if status else False,
+        "http_status": status.http_status if status else None,
         "params": params,
         "destination_examples": examples,
         "wrong_endpoint": endpoint != "google_flights_deals",
@@ -434,7 +449,7 @@ async def run_search_route(request: Request, background_tasks: BackgroundTasks):
     max_stops = int(str(form.get("max_stops") or settings.max_stops))
     max_air_time = float(str(form.get("max_air_time") or settings.max_air_time_hours))
     max_layover = float(str(form.get("max_layover") or settings.max_layover_hours))
-    modes = ",".join(str(mode) for mode in form.getlist("modes")) or "all"
+    modes = ",".join(str(mode) for mode in form.getlist("modes")) or "flight"
     search_settings = settings.model_copy(
         update={
             "origin_airport": origin.upper(),

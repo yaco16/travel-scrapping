@@ -29,7 +29,7 @@
       <label>Nuits max <input name="max_nights" value="{{ default_config.max_nights }}"></label>
       <label>Prix max <input name="max_price" value="{{ default_config.budget_eur }}"></label>
       <label>Correspondances max <input name="max_stops" value="{{ default_config.max_stops }}"></label>
-      <input name="modes" type="hidden" value="flight">
+      <input name="modes" type="hidden" value="{{ default_config.modes or 'flight' }}">
       <button type="submit" data-run-submit>Lancer recherche</button>
     </form>
   </section>
@@ -60,7 +60,7 @@
         <input name="max_nights" type="hidden" value="{{ run_config.max_nights }}">
         <input name="max_price" type="hidden" value="{{ run_config.budget_eur }}">
         <input name="max_stops" type="hidden" value="{{ run_config.max_stops }}">
-        <input name="modes" type="hidden" value="flight">
+        <input name="modes" type="hidden" value="{{ run_config.modes or 'flight' }}">
         <button type="submit" class="secondary" data-run-submit>Relancer avec cette configuration</button>
       </form>
     </div>

@@ -48,11 +48,14 @@ def build_providers(settings: Settings, *, include_indicative: bool = False) -> 
     return providers
 
 
-def parse_modes(modes: str) -> set[str]:
+def parse_modes(modes: str | None) -> set[str]:
+    if not modes:
+        return {"flight"}
     if modes == "all":
         return set(ALL_TRANSPORT_MODES)
     parsed = {part.strip() for part in modes.split(",") if part.strip()}
-    return parsed & ALL_TRANSPORT_MODES
+    mode_set = parsed & ALL_TRANSPORT_MODES
+    return mode_set or {"flight"}
 
 
 def rejection_reasons(deal: DealCandidate, reasons: list[str]) -> list[str]:
@@ -132,9 +135,8 @@ async def run_search(
             max_nights=settings.max_nights,
         )
         mode_set = parse_modes(modes)
-        providers = providers or (
-            build_providers(settings, include_indicative=include_indicative) if "flight" in mode_set else []
-        )
+        if providers is None:
+            providers = build_providers(settings, include_indicative=include_indicative) if "flight" in mode_set else []
         with session_scope(factory) as session:
             if run_id is None:
                 run = SearchRun(status="running")

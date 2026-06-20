@@ -91,6 +91,91 @@ def test_parse_modes_all_includes_flight_bus_train():
     assert parse_modes("all") == {"flight", "bus", "train"}
 
 
+def test_parse_modes_defaults_to_flight_on_empty_or_invalid():
+    assert parse_modes("") == {"flight"}
+    assert parse_modes(None) == {"flight"}
+    assert parse_modes("boat") == {"flight"}
+
+
+@pytest.mark.asyncio
+async def test_run_search_flight_mode_builds_flight_provider(tmp_path, monkeypatch):
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path}/x.db",
+        date_to=date.today().replace(year=date.today().year + 1),
+        top_results_limit=1,
+    )
+    monkeypatch.setattr("travel_scrapping.search.engine.build_providers", lambda settings, **kwargs: [FakeProvider(settings)])
+
+    run_id = await run_search(settings, modes="flight")
+
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        statuses = list(session.query(ProviderStatusRow).order_by(ProviderStatusRow.id))
+        run = session.get(SearchRun, run_id)
+
+    assert run is not None
+    assert run.status == "completed"
+    assert [row.name for row in statuses] == ["fake"]
+    assert statuses[0].attempted is False
+    assert statuses[0].raw_count == 1
+
+
+@pytest.mark.asyncio
+async def test_run_search_all_mode_keeps_flight_provider_when_ground_disabled(tmp_path, monkeypatch):
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path}/x.db",
+        date_to=date.today().replace(year=date.today().year + 1),
+        top_results_limit=1,
+        bus_enabled=False,
+        distribusion_enabled=False,
+    )
+    monkeypatch.setattr("travel_scrapping.search.engine.build_providers", lambda settings, **kwargs: [FakeProvider(settings)])
+
+    run_id = await run_search(settings, modes="all")
+
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        statuses = list(session.query(ProviderStatusRow).order_by(ProviderStatusRow.id))
+        run = session.get(SearchRun, run_id)
+
+    assert run is not None
+    assert run.status == "completed"
+    assert [row.name for row in statuses] == ["fake", "distribusion", "flixbus"]
+    assert statuses[0].raw_count == 1
+    assert statuses[1].enabled is False
+    assert statuses[2].enabled is False
+
+
+@pytest.mark.asyncio
+async def test_run_search_bus_train_mode_does_not_build_flight_provider(tmp_path, monkeypatch):
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path}/x.db",
+        date_to=date.today().replace(year=date.today().year + 1),
+        top_results_limit=1,
+        bus_enabled=False,
+        distribusion_enabled=False,
+    )
+
+    def fail_build(settings, **kwargs):
+        raise AssertionError("flight provider should not be built")
+
+    monkeypatch.setattr("travel_scrapping.search.engine.build_providers", fail_build)
+
+    run_id = await run_search(settings, modes="bus,train")
+
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        statuses = list(session.query(ProviderStatusRow).order_by(ProviderStatusRow.id))
+        run = session.get(SearchRun, run_id)
+
+    assert run is not None
+    assert run.status == "completed"
+    assert [row.name for row in statuses] == ["distribusion", "flixbus"]
+
+
 def test_create_search_run_and_latest_empty(tmp_path):
     settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path}/x.db")
 

@@ -705,7 +705,7 @@ def test_deals_api_returns_normalized_deals_and_provider_status(tmp_path, monkey
     assert payload["deals"][0]["provider_status"] == "Too many requests"
     assert "flixbus_rapidapi" in payload["provider_statuses"]
     assert payload["provider_diagnostics"][0]["provider"] == "flixbus_rapidapi"
-    assert payload["no_offer_message"] == "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs."
+    assert payload["no_offer_message"] == "Aucun fournisseur actif pour ce run. Vérifie les modes et les clés API."
 
 
 def test_deals_api_serializes_train_deal(tmp_path, monkeypatch):
@@ -821,7 +821,7 @@ def test_results_show_flixbus_provider_error_without_secret(tmp_path, monkeypatc
     assert "RAPIDAPI_KEY" not in response.text
 
 
-def test_results_show_zero_offer_diagnostic(tmp_path, monkeypatch):
+def test_results_diagnostics_show_serpapi_attempted_status_when_zero_raw(tmp_path, monkeypatch):
     get_settings.cache_clear()
     db_url = f"sqlite:///{tmp_path}/web.db"
     monkeypatch.setenv("DATABASE_URL", db_url)
@@ -850,9 +850,11 @@ def test_results_show_zero_offer_diagnostic(tmp_path, monkeypatch):
     response = client.get("/results")
 
     assert response.status_code == 200
-    assert "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs." in response.text
+    assert "SerpApi appelé, mais 0 offre brute reçue." in response.text
+    assert "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs." not in response.text
     assert "<td>serpapi</td>" in response.text
     assert "<td>200</td>" in response.text
+    assert "<td>oui</td>" in response.text
     assert "La recherche ne peut pas reproduire Google Flight Deals : endpoint différent." in response.text
 
 
@@ -1075,3 +1077,30 @@ def test_home_distinguishes_default_config_and_latest_run_snapshot(tmp_path, mon
     assert "Budget max 150,00 EUR · 1-7 nuits" in response.text
     assert f'href="/results?run_id={run_id}"' in response.text
     assert "Relancer avec cette configuration" in response.text
+
+
+def test_home_rerun_preserves_run_modes(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    config = {
+        "origin_airport": "NCE",
+        "budget_eur": 150,
+        "search_start_date": "2026-07-01",
+        "search_end_date": "2026-08-31",
+        "min_nights": 1,
+        "max_nights": 7,
+        "max_stops": 1,
+        "top_results_limit": 50,
+        "currency": "EUR",
+        "modes": "bus,train",
+    }
+    with session_scope(factory) as session:
+        session.add(SearchRun(status="completed", config_json=json.dumps(config)))
+
+    client = TestClient(create_app())
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert '<input name="modes" type="hidden" value="bus,train">' in response.text
