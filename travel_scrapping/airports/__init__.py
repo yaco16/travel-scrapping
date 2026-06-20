@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from travel_scrapping.config import Settings
-from travel_scrapping.db import AirportMetadata, PriceObservation
+from travel_scrapping.db import AirportMetadata, OurAirport, PriceObservation
 
 FRENCH_CITY_BY_IATA = {
     "VCE": "Venise",
@@ -171,17 +171,37 @@ def resolve_airport(
     if not code:
         return AirportResolveResult(unknown_airport(code))
 
-    if session is not None and not force:
-        try:
-            cached = session.get(AirportMetadata, code)
-            if cached:
-                return AirportResolveResult(info_from_cache(cached), cache_hit=True)
-        except SQLAlchemyError:
-            session.rollback()
+    order = [part.strip().lower() for part in settings.airport_resolver_order.split(",") if part.strip()]
 
     info = None
     api_attempted = False
-    if settings.api_ninjas_api_key:
+    for source in order:
+        if source == "cache" and session is not None and not force:
+            try:
+                cached = session.get(AirportMetadata, code)
+                if cached:
+                    return AirportResolveResult(info_from_cache(cached), cache_hit=True)
+            except SQLAlchemyError:
+                session.rollback()
+        elif source == "ourairports" and session is not None and settings.ourairports_enabled:
+            from travel_scrapping.airports.ourairports import lookup_airport
+
+            info = lookup_airport(session, code)
+            if info is not None:
+                break
+        elif source in {"ninja", "api_ninjas"} and settings.api_ninjas_enabled and settings.api_ninjas_api_key:
+            from travel_scrapping.providers.api_ninjas_airports import fetch_airport_by_iata
+
+            api_attempted = True
+            info = fetch_airport_by_iata(code, settings=settings)
+            if info is not None:
+                break
+        elif source == "fallback":
+            info = fallback_airport(code)
+            if info is not None:
+                break
+
+    if info is None and settings.api_ninjas_enabled and settings.api_ninjas_api_key and "ninja" not in order:
         from travel_scrapping.providers.api_ninjas_airports import fetch_airport_by_iata
 
         api_attempted = True
@@ -195,6 +215,14 @@ def resolve_airport(
         cache_airport(session, info)
 
     return AirportResolveResult(info)
+
+
+def count_cached_airports(session: Session) -> int:
+    return session.scalar(select(func.count(AirportMetadata.iata))) or 0
+
+
+def count_ourairports(session: Session) -> int:
+    return session.scalar(select(func.count(OurAirport.iata_code))) or 0
 
 
 def destination_display_name(iata_code: str | None, city: str | None = None) -> str:

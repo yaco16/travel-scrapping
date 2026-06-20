@@ -4,27 +4,41 @@
 {% if email_enabled %}
 <form action="/email" method="post"><button type="submit">Envoyer email</button></form>
 {% endif %}
+<nav class="tabs">
+  <a href="/results">Tous</a>
+  <a href="/results?mode=flight">Avion</a>
+  <a href="/results?mode=bus">Bus</a>
+</nav>
+{% if deals %}
 <div class="table-wrapper">
   <table>
-    <tr><th>Destination</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Airlines</th><th>Source</th><th>Confiance</th><th>Warnings</th><th>Lien</th></tr>
+    <tr><th>Mode</th><th>Destination</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Opérateur</th><th>Durée</th><th>Escales/Changements</th><th>Source</th><th>Confiance</th><th>Lien</th></tr>
     {% for deal in deals %}
     <tr>
+      <td>{{ deal.transport_mode|mode_display }}</td>
       <td><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a></td>
       <td>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }}</td>
       <td>{{ deal.nights }}</td>
       <td>{{ deal.total_price_eur|price_display }}</td>
-      <td>{{ deal.airlines_json|airlines_display }}</td>
+      <td>{{ deal.operator_name or deal.airlines_json|airlines_display }}</td>
+      <td>{{ deal.duration_minutes|duration_display }}</td>
+      <td>{{ deal.stops_count if deal.stops_count is not none else "" }}</td>
       <td>{{ deal.source }}</td>
       <td>{{ deal.confidence }}</td>
-      <td>
-        {% for warning in deal.warnings_json|warnings_display %}
-          <span class="badge">{{ warning }}</span>
-        {% endfor %}
-      </td>
-      <td>{% if deal.booking_url %}<a href="{{ deal.booking_url }}" rel="noreferrer">Réserver</a>{% else %}{{ deal|booking_display }}{% endif %}</td>
+      <td><a href="{{ deal.booking_url }}" rel="noreferrer">Voir l’offre</a></td>
     </tr>
     {% endfor %}
   </table>
 </div>
-{% if not deals %}<p>Aucun deal accepté.</p>{% endif %}
+{% else %}
+<p>Aucune offre exploitable trouvée.</p>
+<section>
+  <h2>Diagnostics</h2>
+  <p>SerpApi : clé présente {{ "oui" if diagnostics.serpapi_key_present else "non" }}, dernier statut {{ diagnostics.serpapi_last_status }}, dernier JSON debug {{ diagnostics.serpapi_last_json }}</p>
+  <p>Travelpayouts : {{ "actif" if diagnostics.travelpayouts_active else "désactivé" }}, marker présent {{ "oui" if diagnostics.travelpayouts_marker_present else "non" }}</p>
+  <p>OurAirports : actif {{ "oui" if diagnostics.ourairports_active else "non" }}, {{ diagnostics.ourairports_count }} aéroports importés</p>
+  <p>API Ninjas : actif {{ "oui" if diagnostics.api_ninjas_active else "non" }}</p>
+  <p>FlixBus : actif {{ "oui" if diagnostics.flixbus_active else "non" }}, clé RapidAPI présente {{ "oui" if diagnostics.rapidapi_key_present else "non" }}, dernier statut {{ diagnostics.flixbus_last_status }}, dernier JSON debug {{ diagnostics.flixbus_last_json }}</p>
+</section>
+{% endif %}
 {% endblock %}

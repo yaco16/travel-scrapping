@@ -1,6 +1,6 @@
 # Travel Scrapping
 
-FastAPI + HTMX dashboard for very cheap round-trip flight deals from Nice (NCE).
+FastAPI + HTMX dashboard for very cheap actionable flight and bus deals from Nice (NCE).
 
 Defaults: one adult, personal item only, no checked/cabin bag, 3-5 nights, under 100 EUR total, from today to 2026-08-30, max 5h air time per direction, max 3h layover, no overnight airport stay.
 
@@ -13,7 +13,11 @@ cp .env.example .env
 
 Fill `.env` with available keys. Keep `.env` untracked.
 
-`API_NINJAS_API_KEY` is optional. When set, airport IATA codes are enriched through API Ninjas Airports API and cached locally. Without it, the app keeps using local French city fallback and never fails startup.
+Amadeus is not used: no `AMADEUS_CLIENT_ID`, no `AMADEUS_CLIENT_SECRET`, no Amadeus resolver or dependency.
+
+Airport resolution uses local SQLite cache first, then local OurAirports data, then API Ninjas as optional fallback, then minimal hardcoded fallback. `OURAIRPORTS_ENABLED=true` is recommended. `API_NINJAS_API_KEY` is optional and kept only as fallback.
+
+`SERPAPI_API_KEY` is required for actionable flight results. `RAPIDAPI_KEY` is required for FlixBus via RapidAPI. `TRAVELPAYOUTS_MARKER` is optional, but without marker Travelpayouts is excluded from main results unless `--include-indicative` is explicit.
 
 ## Dashboard
 
@@ -28,9 +32,16 @@ Open `http://127.0.0.1:8000`.
 ```bash
 .venv/bin/python -m travel_scrapping.cli config
 .venv/bin/python -m travel_scrapping.cli search
+.venv/bin/python -m travel_scrapping.cli search --origin NCE --depart-from 2026-07-01 --depart-to 2026-08-31 --min-nights 3 --max-nights 5 --modes flight,bus
 .venv/bin/python -m travel_scrapping.cli top
+.venv/bin/python -m travel_scrapping.cli airports-import-ourairports
+.venv/bin/python -m travel_scrapping.cli airports-import-ourairports --force-refresh
 .venv/bin/python -m travel_scrapping.cli airports-refresh
 .venv/bin/python -m travel_scrapping.cli airports-refresh --iata VCE
+.venv/bin/python -m travel_scrapping.cli airports-diagnostics
+.venv/bin/python -m travel_scrapping.cli serpapi-smoke --origin NCE --destination VCE --depart 2026-07-30 --return 2026-08-02 --debug
+.venv/bin/python -m travel_scrapping.cli bus-stations-search --query "Nice"
+.venv/bin/python -m travel_scrapping.cli flixbus-smoke --origin "Nice" --destination "Venise" --depart 2026-07-30 --return 2026-08-02 --debug
 .venv/bin/python -m travel_scrapping.cli sqlite-diagnostics
 .venv/bin/python -m travel_scrapping.cli sqlite-clean-invalid --dry-run
 .venv/bin/python -m travel_scrapping.cli sqlite-clean-invalid --execute
@@ -51,7 +62,7 @@ Dashboard: `http://127.0.0.1:8000/sqlite`.
 
 `sqlite-clean-invalid` sert uniquement au nettoyage des anciennes lignes corrompues de développement local dans `price_observations`. `--dry-run` affiche le nombre de lignes supprimables. `--execute` supprime seulement les observations dont un champ indispensable est nul. Les campagnes ne sont jamais supprimées.
 
-Airport metadata is cached in SQLite table `airport_metadata` with IATA, city, French display city, airport name, country, timezone, coordinates, source, fetch timestamp and raw payload. `airports-refresh --force` bypasses cache and refreshes from API when `API_NINJAS_API_KEY` exists.
+Airport metadata is cached in SQLite table `airport_metadata`. OurAirports is imported into `ourairports_airports` from `data/sources/ourairports/airports.csv`.
 
 ## Tests
 
@@ -62,11 +73,11 @@ Airport metadata is cached in SQLite table `airport_metadata` with IATA, city, F
 
 ## Providers
 
-SerpAPI Google Flights is the main live source when `SERPAPI_API_KEY` exists. Travelpayouts widens discovery and is marked medium/low confidence, especially without marker/deeplink support. Playwright is a safe disabled skeleton: no CAPTCHA bypass, no login bypass, no proxy rotation, no rate-limit evasion.
+SerpAPI Google Flights is the main live flight source when `SERPAPI_API_KEY` exists. FlixBus via RapidAPI is the bus source when `RAPIDAPI_KEY` exists. Travelpayouts widens discovery only when marker/deeplink support exists, or in explicit indicative mode.
 
 Missing provider keys skip providers instead of crashing.
 
-API Ninjas Airports enriches airport metadata when `API_NINJAS_API_KEY` exists. The key is not required; missing key falls back to local mappings such as `VCE -> Venise`, `SVQ -> Séville`, `BCN -> Barcelone`.
+The main table displays only actionable offers: numeric EUR price, operator/company, dates, route and usable booking link. Non-actionable rows remain diagnostics/observations and are not shown as primary results.
 
 ## Email
 

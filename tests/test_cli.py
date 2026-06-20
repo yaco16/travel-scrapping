@@ -32,6 +32,7 @@ def _seed_observations() -> None:
                         nights=3,
                         total_price=price,
                         airlines=["U2"],
+                        booking_url="https://example.test/book",
                         raw_payload={"price": price},
                     )
                 ],
@@ -98,3 +99,42 @@ def test_sqlite_clean_invalid_execute_deletes_only_invalid_observations(tmp_path
     with session_scope(factory) as session:
         assert session.query(PriceObservation).count() == 2
         assert session.query(SearchRun).count() == 2
+
+
+def test_cli_config_smoke_and_missing_key_commands(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/cli.db")
+    monkeypatch.setenv("SERPAPI_API_KEY", "")
+    monkeypatch.setenv("RAPIDAPI_KEY", "")
+
+    assert runner.invoke(app, ["config"]).exit_code == 0
+    assert runner.invoke(app, ["smoke"]).output.strip() == "db=ok providers=manual-live-only"
+    assert "SERPAPI_API_KEY manquant" in runner.invoke(
+        app,
+        ["serpapi-smoke", "--origin", "NCE", "--destination", "VCE", "--depart", "2026-07-30", "--return", "2026-08-02"],
+    ).output
+    assert "RAPIDAPI_KEY missing" in runner.invoke(app, ["bus-stations-search", "--query", "Nice"]).output
+    assert "RAPIDAPI_KEY missing" in runner.invoke(
+        app,
+        ["flixbus-smoke", "--origin", "Nice", "--destination", "Venise", "--depart", "2026-07-30", "--return", "2026-08-02"],
+    ).output
+
+
+def test_cli_airports_import_and_diagnostics(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/cli.db")
+
+    def fake_import(session, force_refresh=False):
+        from pathlib import Path
+        from travel_scrapping.airports.ourairports import ImportResult
+
+        return ImportResult(Path("data/sources/ourairports/airports.csv"), 2)
+
+    monkeypatch.setattr("travel_scrapping.cli.import_ourairports", fake_import)
+
+    result = runner.invoke(app, ["airports-import-ourairports", "--force-refresh"])
+    assert result.exit_code == 0
+    assert "importés=2" in result.output
+    diagnostics = runner.invoke(app, ["airports-diagnostics"])
+    assert diagnostics.exit_code == 0
+    assert "aéroports en cache=0" in diagnostics.output

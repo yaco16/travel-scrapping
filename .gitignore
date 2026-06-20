@@ -12,3 +12,5 @@ htmlcov/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/debug/
+data/sources/

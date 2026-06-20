@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 
 from travel_scrapping.config import get_settings, safe_settings_dict
 from travel_scrapping.db import (
+    OurAirport,
     Deal,
     PriceObservation,
     SearchRun,
@@ -32,6 +33,8 @@ templates.env.filters["price_display"] = presentation.price_display
 templates.env.filters["airlines_display"] = presentation.airlines_display
 templates.env.filters["warnings_display"] = presentation.warnings_display
 templates.env.filters["booking_display"] = presentation.booking_display
+templates.env.filters["mode_display"] = presentation.mode_display
+templates.env.filters["duration_display"] = presentation.duration_display
 router = APIRouter()
 
 
@@ -49,7 +52,26 @@ def valid_display_deal(deal: Deal, settings) -> bool:
         return False
     if deal.total_price_eur is None or deal.total_price_eur >= settings.max_roundtrip_price_eur:
         return False
+    if not deal.actionable or not deal.booking_url or not deal.operator_name:
+        return False
     return True
+
+
+def diagnostics_context(settings, session) -> dict[str, object]:
+    return {
+        "serpapi_key_present": bool(settings.serpapi_api_key),
+        "serpapi_last_status": "non disponible",
+        "serpapi_last_json": "data/debug/",
+        "travelpayouts_active": bool(settings.travelpayouts_token and settings.travelpayouts_marker),
+        "travelpayouts_marker_present": bool(settings.travelpayouts_marker),
+        "ourairports_active": settings.ourairports_enabled,
+        "ourairports_count": session.query(OurAirport).count(),
+        "api_ninjas_active": settings.api_ninjas_enabled,
+        "flixbus_active": settings.bus_enabled and settings.flixbus_enabled,
+        "rapidapi_key_present": bool(settings.rapidapi_key),
+        "flixbus_last_status": "non disponible",
+        "flixbus_last_json": "data/debug/",
+    }
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -92,7 +114,12 @@ def results(request: Request):
         return templates.TemplateResponse(
             request,
             "results.html",
-            {"run": run, "deals": deals, "email_enabled": settings.email_enabled},
+            {
+                "run": run,
+                "deals": deals,
+                "email_enabled": settings.email_enabled,
+                "diagnostics": diagnostics_context(settings, session),
+            },
         )
 
 

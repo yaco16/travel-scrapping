@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import Any
 
 from travel_scrapping.airports import destination_display_name
+from travel_scrapping.formatters import format_date_fr, format_duration, format_price_fr
 
 WARNING_LABELS = {
     "cached or indicative fare; verify before booking": "Prix indicatif : à vérifier avant réservation",
@@ -39,31 +40,16 @@ def destination_display(deal: Any) -> str:
 
 
 def short_date(value: date | datetime | str | None) -> str:
-    if not value:
-        return "Non disponible"
-    if isinstance(value, str):
-        try:
-            value = date.fromisoformat(value[:10])
-        except ValueError:
-            return "Non disponible"
-    if hasattr(value, "strftime"):
-        return value.strftime("%d/%m/%y")
-    return "Non disponible"
+    return format_date_fr(value, diagnostic=True)
 
 
 def price_display(value: float | int | Decimal | None) -> str:
-    if value is None:
-        return "Non disponible"
-    amount = Decimal(str(value))
-    if amount == amount.to_integral():
-        return f"{int(amount):,}".replace(",", " ")
-    formatted = f"{amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f}"
-    return formatted.replace(",", " ").replace(".", ",")
+    return format_price_fr(value, "EUR", diagnostic=True)
 
 
 def airlines_display(airlines_json: str | None) -> str:
     airlines = parse_json_list(airlines_json)
-    return ", ".join(airlines) if airlines else "Non communiqué"
+    return ", ".join(airlines) if airlines else ""
 
 
 def warnings_display(warnings_json: str | None) -> list[str]:
@@ -77,3 +63,11 @@ def booking_display(deal: Any) -> str:
     if "travelpayouts marker missing" in warnings:
         return WARNING_LABELS["travelpayouts marker missing"]
     return "Lien indisponible : source sans URL"
+
+
+def mode_display(value: str | None) -> str:
+    return "Bus" if value == "bus" else "Avion"
+
+
+def duration_display(minutes: int | None) -> str:
+    return format_duration(minutes)

@@ -8,8 +8,15 @@ from travel_scrapping.search.providers.travelpayouts import TravelpayoutsProvide
 
 def test_travelpayouts_missing_marker_warns():
     status = TravelpayoutsProvider(Settings(_env_file=None, travelpayouts_token="tok", travelpayouts_marker="")).status()
+    assert not status.enabled
+    assert "Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant" in status.warnings
+
+
+def test_travelpayouts_missing_marker_include_indicative_enabled():
+    status = TravelpayoutsProvider(
+        Settings(_env_file=None, travelpayouts_token="tok", travelpayouts_marker="", include_indicative=True)
+    ).status()
     assert status.enabled
-    assert "TRAVELPAYOUTS_MARKER missing; deeplinks disabled" in status.warnings
 
 
 def test_travelpayouts_missing_token_disabled():

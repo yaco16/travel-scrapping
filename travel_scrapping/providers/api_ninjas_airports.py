@@ -36,7 +36,7 @@ def _info_from_payload(payload: dict[str, Any], code: str) -> AirportInfo:
 def fetch_airport_by_iata(iata_code: str, settings: Settings | None = None) -> AirportInfo | None:
     settings = settings or get_settings()
     code = normalize_iata(iata_code)
-    if not code or not settings.api_ninjas_api_key:
+    if not code or not settings.api_ninjas_enabled or not settings.api_ninjas_api_key:
         return None
     try:
         response = httpx.get(

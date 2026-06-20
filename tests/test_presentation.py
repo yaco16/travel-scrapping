@@ -32,12 +32,12 @@ def test_short_date_format():
 
 
 def test_price_display_without_currency_or_decimals():
-    assert price_display(55.00) == "55"
-    assert price_display(1234.5) == "1 234,50"
+    assert price_display(55.00) == "55,00 €"
+    assert price_display(1234.5) == "1 234,50 €"
 
 
 def test_empty_airlines_displayed_as_unknown():
-    assert airlines_display("[]") == "Non communiqué"
+    assert airlines_display("[]") == ""
 
 
 def test_warnings_translated_to_french():

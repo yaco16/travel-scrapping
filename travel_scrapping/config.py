@@ -39,8 +39,18 @@ class Settings(BaseSettings):
 
     serpapi_api_key: str = ""
     api_ninjas_api_key: str = ""
+    airport_resolver_order: str = "cache,ourairports,ninja,fallback"
+    ourairports_enabled: bool = True
+    api_ninjas_enabled: bool = True
     travelpayouts_token: str = ""
     travelpayouts_marker: str = ""
+    include_indicative: bool = False
+    bus_enabled: bool = True
+    flixbus_enabled: bool = True
+    rapidapi_key: str = ""
+    flixbus_rapidapi_host: str = ""
+    flixbus_rapidapi_base_url: str = "https://flixbus2.p.rapidapi.com"
+    flixbus_debug_save: bool = True
     kiwi_tequila_api_key: str = ""
     brevo_api_key: str = ""
     email_enabled: bool = False
@@ -68,10 +78,16 @@ class Settings(BaseSettings):
             warnings.append("BREVO_API_KEY missing; email sending disabled.")
         if not self.serpapi_api_key:
             warnings.append("SERPAPI_API_KEY missing; SerpAPI provider skipped.")
+        if self.api_ninjas_enabled and not self.api_ninjas_api_key:
+            warnings.append("API_NINJAS_API_KEY missing; API Ninjas airport fallback skipped.")
+        if not self.ourairports_enabled:
+            warnings.append("OurAirports airport resolver disabled.")
+        if self.bus_enabled and self.flixbus_enabled and not self.rapidapi_key:
+            warnings.append("RAPIDAPI_KEY missing; FlixBus provider skipped.")
         if not self.travelpayouts_token:
             warnings.append("TRAVELPAYOUTS_TOKEN missing; Travelpayouts provider skipped.")
         if self.travelpayouts_token and not self.travelpayouts_marker:
-            warnings.append("TRAVELPAYOUTS_MARKER missing; marker-required endpoints disabled.")
+            warnings.append("Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant")
         return warnings
 
     @property
@@ -82,6 +98,7 @@ class Settings(BaseSettings):
 SECRET_FIELDS = {
     "serpapi_api_key",
     "api_ninjas_api_key",
+    "rapidapi_key",
     "travelpayouts_token",
     "travelpayouts_marker",
     "kiwi_tequila_api_key",

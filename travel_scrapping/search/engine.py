@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import yaml
 from sqlalchemy import select
 
 from travel_scrapping.config import Settings
+from travel_scrapping.bus.flixbus_rapidapi import FlixBusRapidApiProvider
 from travel_scrapping.db import ProviderStatusRow, SearchRun, init_db, save_deals, session_scope
 from travel_scrapping.schemas import DealCandidate, Destination
 from travel_scrapping.search.date_grid import generate_roundtrip_dates
@@ -31,24 +33,32 @@ def load_destinations(path: str = "config/destinations.yaml") -> list[Destinatio
     return destinations
 
 
-def build_providers(settings: Settings) -> list[FlightProvider]:
-    return [
-        SerpApiGoogleFlightsProvider(settings),
-        TravelpayoutsProvider(settings),
-        PlaywrightProbeProvider(settings),
-    ]
+def build_providers(settings: Settings, *, include_indicative: bool = False) -> list[FlightProvider]:
+    providers: list[FlightProvider] = [SerpApiGoogleFlightsProvider(settings)]
+    if settings.travelpayouts_marker or include_indicative or settings.include_indicative:
+        providers.append(TravelpayoutsProvider(settings))
+    providers.append(PlaywrightProbeProvider(settings))
+    return providers
 
 
-async def run_search(settings: Settings, *, providers: list[FlightProvider] | None = None) -> int:
+async def run_search(
+    settings: Settings,
+    *,
+    providers: list[FlightProvider] | None = None,
+    modes: str = "flight",
+    include_indicative: bool = False,
+    depart_from: date | None = None,
+) -> int:
     factory = init_db(settings)
     destinations = load_destinations()
     date_pairs = generate_roundtrip_dates(
-        today=date.today(),
+        today=depart_from or date.today(),
         date_to=settings.effective_search_end_date,
         min_nights=settings.min_nights,
         max_nights=settings.max_nights,
     )
-    providers = providers or build_providers(settings)
+    mode_set = {"flight", "bus"} if modes == "all" else {part.strip() for part in modes.split(",")}
+    providers = providers or (build_providers(settings, include_indicative=include_indicative) if "flight" in mode_set else [])
     with session_scope(factory) as session:
         run = SearchRun(status="running")
         session.add(run)
@@ -63,7 +73,7 @@ async def run_search(settings: Settings, *, providers: list[FlightProvider] | No
                     name=status.name,
                     enabled=status.enabled,
                     ok=status.ok,
-                    warnings_json="[]",
+                    warnings_json=json.dumps(status.warnings),
                     error=status.error,
                 )
             )
@@ -86,10 +96,48 @@ async def run_search(settings: Settings, *, providers: list[FlightProvider] | No
                 continue
             for deal in candidates:
                 ok, _reasons = validate_deal(deal, settings)
-                if ok:
+                if ok and deal.actionable:
                     all_deals.append(deal)
                 else:
                     rejected += 1
+        if "bus" in mode_set:
+            bus_provider = FlixBusRapidApiProvider(settings)
+            status = bus_provider.status()
+            session.add(
+                ProviderStatusRow(
+                    run_id=run.id,
+                    name=status.name,
+                    enabled=status.enabled,
+                    ok=status.ok,
+                    warnings_json=json.dumps(status.warnings),
+                    error=status.error,
+                )
+            )
+            if status.enabled and date_pairs:
+                outbound, ret, _nights = date_pairs[0]
+                for destination in destinations[: max(1, min(len(destinations), settings.top_results_limit))]:
+                    try:
+                        offers = await bus_provider.search_roundtrip("Nice", destination.city, outbound.isoformat(), ret.isoformat())
+                    except Exception as exc:
+                        rejected += 1
+                        session.add(
+                            ProviderStatusRow(
+                                run_id=run.id,
+                                name=bus_provider.name,
+                                enabled=True,
+                                ok=False,
+                                warnings_json="[]",
+                                error=str(exc)[:500],
+                            )
+                        )
+                        continue
+                    for offer in offers:
+                        deal = offer.to_deal_candidate()
+                        ok, _reasons = validate_deal(deal, settings)
+                        if ok and deal.actionable:
+                            all_deals.append(deal)
+                        else:
+                            rejected += 1
         sorted_deals = sort_deals(all_deals)[: settings.top_results_limit]
         inserted = save_deals(session, run, sorted_deals)
         run.status = "completed"

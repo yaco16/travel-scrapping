@@ -28,21 +28,22 @@ def validate_deal(deal: DealCandidate, settings: Settings, *, today: date | None
         reasons.append("non-EUR price without conversion")
     if (deal.total_price_eur or 0) >= settings.max_roundtrip_price_eur:
         reasons.append("over budget")
-    if deal.max_layover_hours is not None and deal.max_layover_hours > settings.max_layover_hours:
+    is_bus = deal.transport_mode == "bus"
+    if not is_bus and deal.max_layover_hours is not None and deal.max_layover_hours > settings.max_layover_hours:
         reasons.append("layover too long")
     if deal.has_overnight_airport and not settings.allow_overnight_airport:
         reasons.append("overnight airport stay")
-    if deal.outbound_duration_hours is not None and deal.outbound_duration_hours > settings.max_air_time_hours:
+    if not is_bus and deal.outbound_duration_hours is not None and deal.outbound_duration_hours > settings.max_air_time_hours:
         reasons.append("outbound air time too long")
-    if deal.return_duration_hours is not None and deal.return_duration_hours > settings.max_air_time_hours:
+    if not is_bus and deal.return_duration_hours is not None and deal.return_duration_hours > settings.max_air_time_hours:
         reasons.append("return air time too long")
     if deal.has_connection and not settings.allow_connections:
         reasons.append("connections disabled")
     if deal.self_transfer and not settings.allow_self_transfer:
         reasons.append("self-transfer disabled")
-    if deal.has_connection is None:
+    if not is_bus and deal.has_connection is None:
         warnings.append("connection status unknown")
-    if deal.max_layover_hours is None:
+    if not is_bus and deal.max_layover_hours is None:
         warnings.append("layover unknown")
     deal.warnings = sorted(set(warnings))
     return not reasons, reasons

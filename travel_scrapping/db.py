@@ -40,6 +40,8 @@ class Deal(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("search_runs.id"))
     source: Mapped[str] = mapped_column(String(64))
+    transport_mode: Mapped[str] = mapped_column(String(16), default="flight")
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     origin_airport: Mapped[str] = mapped_column(String(8))
     destination_airport: Mapped[str] = mapped_column(String(8))
     destination_city: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -59,6 +61,12 @@ class Deal(Base):
     return_duration_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
     max_layover_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
     booking_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    operator_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stops_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actionable: Mapped[bool] = mapped_column(Boolean, default=True)
+    missing_fields_json: Mapped[str] = mapped_column(Text, default="[]")
+    raw_debug_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[str] = mapped_column(String(16))
     warnings_json: Mapped[str] = mapped_column(Text, default="[]")
     raw_payload_z: Mapped[bytes | None] = mapped_column(nullable=True)
@@ -88,6 +96,24 @@ class PriceObservation(Base):
     raw_payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     price_eur: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(64))
+
+
+class OurAirport(Base):
+    __tablename__ = "ourairports_airports"
+
+    iata_code: Mapped[str] = mapped_column(String(8), primary_key=True)
+    ident: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    municipality: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    iso_country: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    iso_region: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    latitude_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    elevation_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    scheduled_service: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    source: Mapped[str] = mapped_column(String(32), default="ourairports")
+    imported_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 def valid_price_observation_clause() -> ColumnElement[bool]:
@@ -175,6 +201,8 @@ def migrate_sqlite(engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     columns = {
+        "transport_mode": "VARCHAR(16) DEFAULT 'flight'",
+        "provider": "VARCHAR(64)",
         "run_id": "INTEGER",
         "origin_iata": "VARCHAR(8)",
         "destination_iata": "VARCHAR(8)",
@@ -190,11 +218,25 @@ def migrate_sqlite(engine) -> None:
         "booking_url": "TEXT",
         "raw_payload_hash": "VARCHAR(64)",
     }
+    deal_columns = {
+        "transport_mode": "VARCHAR(16) DEFAULT 'flight'",
+        "provider": "VARCHAR(64)",
+        "operator_name": "VARCHAR(128)",
+        "duration_minutes": "INTEGER",
+        "stops_count": "INTEGER",
+        "actionable": "BOOLEAN DEFAULT 1",
+        "missing_fields_json": "TEXT DEFAULT '[]'",
+        "raw_debug_path": "TEXT",
+    }
     with engine.begin() as conn:
         existing = {row[1] for row in conn.execute(text("PRAGMA table_info(price_observations)"))}
         for name, column_type in columns.items():
             if name not in existing:
                 conn.execute(text(f"ALTER TABLE price_observations ADD COLUMN {name} {column_type}"))
+        existing_deals = {row[1] for row in conn.execute(text("PRAGMA table_info(deals)"))}
+        for name, column_type in deal_columns.items():
+            if name not in existing_deals:
+                conn.execute(text(f"ALTER TABLE deals ADD COLUMN {name} {column_type}"))
 
 
 @contextmanager
@@ -224,6 +266,8 @@ def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
     return Deal(
         run_id=run_id,
         source=deal.source,
+        transport_mode=deal.transport_mode,
+        provider=deal.provider or deal.source,
         origin_airport=deal.origin_airport,
         destination_airport=deal.destination_airport,
         destination_city=deal.destination_city,
@@ -243,6 +287,12 @@ def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
         return_duration_hours=deal.return_duration_hours,
         max_layover_hours=deal.max_layover_hours,
         booking_url=deal.booking_url,
+        operator_name=deal.operator_name,
+        duration_minutes=deal.duration_minutes,
+        stops_count=deal.stops_count,
+        actionable=deal.actionable,
+        missing_fields_json=json.dumps(deal.missing_fields),
+        raw_debug_path=deal.raw_debug_path,
         confidence=deal.confidence,
         warnings_json=json.dumps(deal.warnings),
         raw_payload_z=compress_payload(deal.raw_payload),
@@ -253,6 +303,8 @@ def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
 def save_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> int:
     inserted = 0
     for deal in deals:
+        if not deal.actionable:
+            continue
         missing = missing_observation_fields(run.id, deal)
         if missing:
             continue

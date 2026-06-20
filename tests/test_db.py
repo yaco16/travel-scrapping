@@ -26,6 +26,8 @@ def test_sqlite_persistence(tmp_path):
         return_date=date(2026, 7, 4),
         nights=3,
         total_price=40,
+        airlines=["easyJet"],
+        booking_url="https://example.test/book",
     )
     with session_scope(factory) as session:
         run = SearchRun(status="completed")
@@ -48,7 +50,7 @@ def test_sqlite_persistence(tmp_path):
         assert observation.nights == 3
         assert observation.price == 40
         assert observation.currency == "EUR"
-        assert observation.airline == "Non communiqué"
+        assert observation.airline == "easyJet"
         assert observation.confidence == "low"
         assert observation.warnings == "[]"
         assert observation.raw_payload_hash is not None
@@ -69,6 +71,7 @@ def test_two_campaigns_persist_two_price_observations(tmp_path):
             nights=3,
             total_price=price,
             airlines=["U2"],
+            booking_url="https://example.test/book",
             confidence="high",
             raw_payload={"price": price},
         )
@@ -98,6 +101,8 @@ def test_save_deals_skips_missing_required_observation_fields(tmp_path):
         return_date=date(2026, 7, 4),
         nights=3,
         total_price=40,
+        airlines=["easyJet"],
+        booking_url="https://example.test/book",
     )
     with session_scope(factory) as session:
         run = SearchRun(status="completed")

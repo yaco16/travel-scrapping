@@ -88,6 +88,10 @@ def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
                     total_price=40,
                     currency="EUR",
                     total_price_eur=40,
+                    airlines_json='["easyJet"]',
+                    operator_name="easyJet",
+                    booking_url="https://example.test/old",
+                    actionable=True,
                     confidence="high",
                     fetched_at=now,
                 ),
@@ -102,6 +106,10 @@ def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
                     total_price=55,
                     currency="EUR",
                     total_price_eur=55,
+                    airlines_json='["easyJet"]',
+                    operator_name="easyJet",
+                    booking_url="https://example.test/bad",
+                    actionable=True,
                     confidence="high",
                     fetched_at=now,
                 ),
@@ -116,6 +124,10 @@ def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
                     total_price=55,
                     currency="EUR",
                     total_price_eur=55,
+                    airlines_json='["easyJet"]',
+                    operator_name="easyJet",
+                    booking_url="https://example.test/good",
+                    actionable=True,
                     confidence="high",
                     fetched_at=now,
                 ),
@@ -142,7 +154,7 @@ def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
     assert "Bratislava" not in response.text
     assert "Barcelone" not in response.text
     assert "legacy" not in response.text
-    assert ">55<" in response.text
+    assert "55,00 €" in response.text
 
 
 def test_results_display_api_ninjas_cached_city_not_iata(tmp_path, monkeypatch):
@@ -167,6 +179,10 @@ def test_results_display_api_ninjas_cached_city_not_iata(tmp_path, monkeypatch):
                 total_price=55,
                 currency="EUR",
                 total_price_eur=55,
+                airlines_json='["easyJet"]',
+                operator_name="easyJet",
+                booking_url="https://example.test/good",
+                actionable=True,
                 confidence="high",
                 fetched_at=now,
             )
@@ -178,3 +194,44 @@ def test_results_display_api_ninjas_cached_city_not_iata(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert "Venise" in response.text
     assert ">VCE<" not in response.text
+
+
+def test_results_do_not_render_raw_warnings_json(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=55)
+        session.add(run)
+        session.flush()
+        session.add(
+            Deal(
+                run_id=run.id,
+                source="serpapi",
+                transport_mode="flight",
+                origin_airport="NCE",
+                destination_airport="VCE",
+                outbound_date=date(2026, 7, 2),
+                return_date=date(2026, 7, 6),
+                nights=4,
+                total_price=55,
+                currency="EUR",
+                total_price_eur=55,
+                airlines_json='["easyJet"]',
+                operator_name="easyJet",
+                booking_url="https://example.test/good",
+                actionable=True,
+                confidence="high",
+                warnings_json='["raw warning"]',
+                fetched_at=now,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert '["raw warning"]' not in response.text
+    assert "raw warning" not in response.text

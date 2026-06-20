@@ -4,6 +4,7 @@ import httpx
 from sqlalchemy import select
 
 from travel_scrapping.airports import resolve_airport
+from travel_scrapping.airports.ourairports import import_csv
 from travel_scrapping.config import Settings
 from travel_scrapping.db import AirportMetadata, init_db, session_scope
 from travel_scrapping.providers.api_ninjas_airports import fetch_airport_by_iata
@@ -123,3 +124,70 @@ def test_resolver_caches_api_result_and_reuses_cache(tmp_path, monkeypatch):
     assert len(rows) == 1
     assert rows[0].iata == "VCE"
     assert rows[0].city == "Venice"
+
+
+def test_ourairports_import_and_resolve(tmp_path):
+    csv_path = tmp_path / "airports.csv"
+    csv_path.write_text(
+        "ident,type,name,latitude_deg,longitude_deg,elevation_ft,iso_country,iso_region,municipality,scheduled_service,iata_code\n"
+        "LIPZ,large_airport,Venice Marco Polo Airport,45.5053,12.3519,7,IT,IT-34,Venice,yes,VCE\n",
+        encoding="utf-8",
+    )
+    settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path}/x.db", api_ninjas_api_key="")
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        assert import_csv(session, csv_path) == 1
+        result = resolve_airport("VCE", settings, session)
+
+    assert result.info.source == "ourairports"
+    assert result.info.display_name == "Venise"
+
+
+def test_api_ninjas_not_called_when_ourairports_has_code(tmp_path, monkeypatch):
+    csv_path = tmp_path / "airports.csv"
+    csv_path.write_text(
+        "ident,type,name,latitude_deg,longitude_deg,elevation_ft,iso_country,iso_region,municipality,scheduled_service,iata_code\n"
+        "LIPZ,large_airport,Venice Marco Polo Airport,45.5053,12.3519,7,IT,IT-34,Venice,yes,VCE\n",
+        encoding="utf-8",
+    )
+    calls = 0
+
+    def fake_fetch(iata_code, settings=None):
+        nonlocal calls
+        calls += 1
+        return None
+
+    monkeypatch.setattr("travel_scrapping.providers.api_ninjas_airports.fetch_airport_by_iata", fake_fetch)
+    settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path}/x.db", api_ninjas_api_key="secret")
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        import_csv(session, csv_path)
+        result = resolve_airport("VCE", settings, session)
+
+    assert result.info.source == "ourairports"
+    assert calls == 0
+
+
+def test_api_ninjas_fallback_when_ourairports_missing_code(tmp_path, monkeypatch):
+    from travel_scrapping.airports import AirportInfo
+
+    def fake_fetch(iata_code, settings=None):
+        return AirportInfo(
+            iata=iata_code,
+            airport_name="Seville Airport",
+            city="Seville",
+            city_fr="Séville",
+            country="Spain",
+            timezone=None,
+            latitude=None,
+            longitude=None,
+            source="api_ninjas",
+        )
+
+    monkeypatch.setattr("travel_scrapping.providers.api_ninjas_airports.fetch_airport_by_iata", fake_fetch)
+    settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path}/x.db", api_ninjas_api_key="secret")
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        result = resolve_airport("SVQ", settings, session)
+
+    assert result.info.source == "api_ninjas"
