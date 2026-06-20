@@ -55,25 +55,58 @@
     {% endfor %}
   </table>
 </div>
-{% if provider_statuses %}
 <section>
-  <h2>Statuts providers</h2>
-  <ul class="status-list">
+  <h2>Diagnostics fournisseurs</h2>
+  <div class="table-wrapper">
+  <table>
+    <tr><th>Provider</th><th>Activé</th><th>Clé présente</th><th>Appel tenté</th><th>HTTP/Erreur</th><th>Brut</th><th>Normalisées</th><th>Acceptées</th><th>Rejetées</th><th>Raison principale</th></tr>
   {% for name, status in provider_statuses.items() %}
-    <li><strong>{{ name }}</strong> : {{ status|provider_status_display }}</li>
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ status.enabled|yes_no }}</td>
+      <td>{{ status.key_present|yes_no }}</td>
+      <td>{{ status.attempted|yes_no }}</td>
+      <td>{% if status.http_status %}{{ status.http_status }}{% elif status.error %}{{ status.error }}{% else %}{{ status|provider_status_display }}{% endif %}</td>
+      <td>{{ status.raw_count or 0 }}</td>
+      <td>{{ status.normalized_count or 0 }}</td>
+      <td>{{ status.accepted_count or 0 }}</td>
+      <td>{{ status.rejected_count or 0 }}</td>
+      <td>{{ status.main_rejection_reason or "Non disponible" }}</td>
+    </tr>
   {% endfor %}
-  </ul>
+  </table>
+  </div>
+  {% if diagnostics.travelpayouts_marker_present == false %}
+  <p>Travelpayouts : endpoints nécessitant un marker désactivés, TRAVELPAYOUTS_MARKER absent.</p>
+  {% endif %}
 </section>
-{% endif %}
 {% else %}
-<p>Aucune offre exploitable trouvée.</p>
+<p>{{ diagnostics.no_offer_message }}</p>
 <section>
-  <h2>Diagnostics</h2>
-  <p>SerpApi : clé présente {{ "oui" if diagnostics.serpapi_key_present else "non" }}, dernier statut {{ diagnostics.serpapi_last_status }}, dernier JSON debug {{ diagnostics.serpapi_last_json }}</p>
-  <p>Travelpayouts : {{ "actif" if diagnostics.travelpayouts_active else "désactivé" }}, marker présent {{ "oui" if diagnostics.travelpayouts_marker_present else "non" }}</p>
-  <p>OurAirports : actif {{ "oui" if diagnostics.ourairports_active else "non" }}, {{ diagnostics.ourairports_count }} aéroports importés</p>
-  <p>API Ninjas : actif {{ "oui" if diagnostics.api_ninjas_active else "non" }}</p>
-  <p>FlixBus : actif {{ "oui" if diagnostics.flixbus_active else "non" }}, clé RapidAPI présente {{ "oui" if diagnostics.rapidapi_key_present else "non" }}, dernier statut {{ diagnostics.flixbus_last_status }}, dernier JSON debug {{ diagnostics.flixbus_last_json }}</p>
+  <h2>Diagnostics fournisseurs</h2>
+  <div class="table-wrapper">
+  <table>
+    <tr><th>Provider</th><th>Activé</th><th>Clé présente</th><th>Appel tenté</th><th>HTTP/Erreur</th><th>Brut</th><th>Normalisées</th><th>Acceptées</th><th>Rejetées</th><th>Raison principale</th></tr>
+  {% for name, status in provider_statuses.items() %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ status.enabled|yes_no }}</td>
+      <td>{{ status.key_present|yes_no }}</td>
+      <td>{{ status.attempted|yes_no }}</td>
+      <td>{% if status.http_status %}{{ status.http_status }}{% elif status.error %}{{ status.error }}{% else %}{{ status|provider_status_display }}{% endif %}</td>
+      <td>{{ status.raw_count or 0 }}</td>
+      <td>{{ status.normalized_count or 0 }}</td>
+      <td>{{ status.accepted_count or 0 }}</td>
+      <td>{{ status.rejected_count or 0 }}</td>
+      <td>{{ status.main_rejection_reason or "Non disponible" }}</td>
+    </tr>
+  {% endfor %}
+  </table>
+  </div>
+  {% if diagnostics.travelpayouts_marker_present == false %}
+  <p>Travelpayouts : endpoints nécessitant un marker désactivés, TRAVELPAYOUTS_MARKER absent.</p>
+  {% endif %}
+  <p>OurAirports : actif {{ diagnostics.ourairports_active|yes_no }}, {{ diagnostics.ourairports_count }} aéroports importés. API Ninjas : actif {{ diagnostics.api_ninjas_active|yes_no }}.</p>
 </section>
 {% endif %}
 {% endblock %}

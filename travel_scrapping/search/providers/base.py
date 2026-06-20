@@ -14,6 +14,14 @@ class ProviderStatus:
     ok: bool = True
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
+    key_present: bool = False
+    attempted: bool = False
+    http_status: int | None = None
+    raw_count: int = 0
+    normalized_count: int = 0
+    accepted_count: int = 0
+    rejected_count: int = 0
+    main_rejection_reason: str | None = None
 
 
 class FlightProvider(ABC):

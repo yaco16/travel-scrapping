@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from travel_scrapping.airports import destination_display_name
-from travel_scrapping.formatters import format_date_fr, format_duration, format_price_fr
+from travel_scrapping.formatters import format_date_fr, format_datetime_fr, format_duration, format_price_fr
 
 WARNING_LABELS = {
     "cached or indicative fare; verify before booking": "Prix indicatif : à vérifier avant réservation",
@@ -41,6 +41,10 @@ def destination_display(deal: Any) -> str:
 
 def short_date(value: date | datetime | str | None) -> str:
     return format_date_fr(value, diagnostic=True)
+
+
+def date_time(value: date | datetime | str | None) -> str:
+    return format_datetime_fr(value, diagnostic=True)
 
 
 def price_display(value: float | int | Decimal | None) -> str:
@@ -111,3 +115,7 @@ def processing_steps(run: Any | None, deals_count: int) -> list[str]:
     label = "Résultats affichés" if deals_count else "Aucun résultat affichable"
     steps.append(f"Étape 05 — {label}")
     return steps
+
+
+def yes_no(value: Any) -> str:
+    return "oui" if value else "non"

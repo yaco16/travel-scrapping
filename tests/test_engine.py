@@ -130,13 +130,15 @@ async def test_run_search_records_disabled_errors_and_rejections(tmp_path):
     assert run.status == "completed"
     assert run.accepted_count == 0
     assert run.rejected_count == 2
-    assert [(row.name, row.enabled, row.ok) for row in statuses] == [
-        ("disabled", False, True),
-        ("raising", True, True),
-        ("raising", True, False),
-        ("rejected", True, True),
+    assert [(row.name, row.enabled, row.ok, row.attempted, row.accepted_count, row.rejected_count) for row in statuses] == [
+        ("disabled", False, True, False, 0, 0),
+        ("raising", True, False, True, 0, 1),
+        ("rejected", True, True, False, 0, 1),
     ]
-    assert statuses[2].error == "secret-token boom"
+    assert statuses[1].error == "secret-token boom"
+    assert statuses[2].raw_count == 1
+    assert statuses[2].normalized_count == 1
+    assert statuses[2].main_rejection_reason == "over budget (1)"
 
 
 @pytest.mark.asyncio
@@ -175,6 +177,8 @@ async def test_run_search_bus_records_last_error_and_rejected_offer(tmp_path, mo
 
         def __init__(self, settings):
             self.last_error = "quota secret-token exceeded"
+            self.last_status_code = 429
+            self.last_path = "/search"
 
         def status(self):
             return ProviderStatus("flixbus", enabled=True)
@@ -212,9 +216,15 @@ async def test_run_search_bus_records_last_error_and_rejected_offer(tmp_path, mo
     assert run is not None
     assert run.accepted_count == 0
     assert run.rejected_count == 1
-    assert len(statuses) == 2
+    assert len(statuses) == 1
     assert statuses[-1].ok is False
     assert statuses[-1].error == "quota secret-token exceeded"
+    assert statuses[-1].attempted is True
+    assert statuses[-1].http_status == 429
+    assert statuses[-1].raw_count == 1
+    assert statuses[-1].normalized_count == 1
+    assert statuses[-1].rejected_count == 1
+    assert statuses[-1].main_rejection_reason == "invalid price (1)"
 
 
 def test_run_search_sync_returns_run_id(tmp_path, monkeypatch):

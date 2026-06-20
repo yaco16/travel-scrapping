@@ -30,10 +30,10 @@ class FlixBusRapidApiProvider(BusProvider):
 
     def status(self) -> ProviderStatus:
         if not self.settings.bus_enabled or not self.settings.flixbus_enabled:
-            return ProviderStatus(self.name, enabled=False, warnings=["FlixBus disabled"])
+            return ProviderStatus(self.name, enabled=False, warnings=["FlixBus disabled"], key_present=bool(self.settings.rapidapi_key))
         if not self.settings.rapidapi_key:
-            return ProviderStatus(self.name, enabled=False, warnings=["RAPIDAPI_KEY missing"])
-        return ProviderStatus(self.name, enabled=True)
+            return ProviderStatus(self.name, enabled=False, warnings=["RAPIDAPI_KEY missing"], key_present=False)
+        return ProviderStatus(self.name, enabled=True, key_present=True)
 
     def headers(self) -> dict[str, str]:
         headers = {"X-RapidAPI-Key": self.settings.rapidapi_key}

@@ -3,9 +3,9 @@
 <h1>Historique</h1>
 <div class="table-wrapper">
   <table>
-    <tr><th>ID</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th></tr>
+    <tr><th>ID</th><th>Date</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th></tr>
     {% for run in runs %}
-    <tr><td>{{ run.id }}</td><td>{{ run.status }}</td><td>{{ run.accepted_count }}</td><td>{{ run.rejected_count }}</td><td>{{ run.cheapest_price_eur|price_display }}</td></tr>
+    <tr><td>{{ run.id }}</td><td>{{ run.started_at|date_time }}</td><td>{{ run.status }}</td><td>{{ run.accepted_count }}</td><td>{{ run.rejected_count }}</td><td>{{ run.cheapest_price_eur|price_display }}</td></tr>
     {% endfor %}
   </table>
 </div>

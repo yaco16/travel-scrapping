@@ -219,6 +219,29 @@ def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
     assert '<meta http-equiv="refresh" content="5">' in response.text
 
 
+def test_history_shows_run_start_date_between_id_and_status(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        session.add(
+            SearchRun(
+                started_at=datetime(2026, 6, 20, 9, 56),
+                status="completed",
+                accepted_count=0,
+                rejected_count=0,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/history")
+
+    assert response.status_code == 200
+    assert "<th>ID</th><th>Date</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th>" in response.text
+    assert "<td>1</td><td>20/06/26 09:56</td><td>completed</td>" in response.text
+
+
 def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
     get_settings.cache_clear()
     db_url = f"sqlite:///{tmp_path}/web.db"
@@ -458,6 +481,8 @@ def test_deals_api_returns_normalized_deals_and_provider_status(tmp_path, monkey
     assert payload["deals"][0]["provider"] == "flixbus_rapidapi"
     assert payload["deals"][0]["provider_status"] == "Too many requests"
     assert "flixbus_rapidapi" in payload["provider_statuses"]
+    assert payload["provider_diagnostics"][0]["provider"] == "flixbus_rapidapi"
+    assert payload["no_offer_message"] == "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs."
 
 
 def test_results_show_flixbus_provider_error_without_secret(tmp_path, monkeypatch):
@@ -486,3 +511,73 @@ def test_results_show_flixbus_provider_error_without_secret(tmp_path, monkeypatc
     assert response.status_code == 200
     assert "You are not subscribed to this API." in response.text
     assert "RAPIDAPI_KEY" not in response.text
+
+
+def test_results_show_zero_offer_diagnostic(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=0, rejected_count=0)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="serpapi",
+                enabled=True,
+                ok=True,
+                key_present=True,
+                attempted=True,
+                http_status=200,
+                raw_count=0,
+                normalized_count=0,
+                accepted_count=0,
+                rejected_count=0,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs." in response.text
+    assert "<td>serpapi</td>" in response.text
+    assert "<td>200</td>" in response.text
+
+
+def test_results_show_all_rejected_diagnostic_and_marker_warning(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("TRAVELPAYOUTS_TOKEN", "token")
+    monkeypatch.delenv("TRAVELPAYOUTS_MARKER", raising=False)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=0, rejected_count=47)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="serpapi",
+                enabled=True,
+                ok=True,
+                key_present=True,
+                attempted=True,
+                http_status=200,
+                raw_count=47,
+                normalized_count=47,
+                accepted_count=0,
+                rejected_count=47,
+                main_rejection_reason="over budget (47)",
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert "Aucune offre exploitable trouvée. 47 offres rejetées : over budget (47)." in response.text
+    assert "Travelpayouts : endpoints nécessitant un marker désactivés" in response.text

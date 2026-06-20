@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import Counter
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -39,10 +40,53 @@ def load_destinations(path: str = "config/destinations.yaml") -> list[Destinatio
 
 def build_providers(settings: Settings, *, include_indicative: bool = False) -> list[FlightProvider]:
     providers: list[FlightProvider] = [SerpApiGoogleFlightsProvider(settings)]
-    if settings.travelpayouts_marker or include_indicative or settings.include_indicative:
-        providers.append(TravelpayoutsProvider(settings))
+    providers.append(TravelpayoutsProvider(settings))
     providers.append(PlaywrightProbeProvider(settings))
     return providers
+
+
+def rejection_reasons(deal: DealCandidate, reasons: list[str]) -> list[str]:
+    values = list(reasons)
+    values.extend(f"missing {field}" for field in deal.missing_fields)
+    if not values and not deal.actionable:
+        values.append("not actionable")
+    return values
+
+
+def main_reason(counter: Counter[str]) -> str | None:
+    if not counter:
+        return None
+    reason, count = counter.most_common(1)[0]
+    return f"{reason} ({count})"
+
+
+def provider_status_row(run_id: int, status) -> ProviderStatusRow:
+    return ProviderStatusRow(
+        run_id=run_id,
+        name=status.name,
+        enabled=status.enabled,
+        ok=status.ok,
+        warnings_json=json.dumps(status.warnings),
+        error=status.error,
+        key_present=status.key_present,
+        attempted=status.attempted,
+        http_status=status.http_status,
+        raw_count=status.raw_count,
+        normalized_count=status.normalized_count,
+        accepted_count=status.accepted_count,
+        rejected_count=status.rejected_count,
+        main_rejection_reason=status.main_rejection_reason,
+    )
+
+
+def enrich_status(row: ProviderStatusRow, provider, *, accepted: int, rejected: int, reasons: Counter[str]) -> None:
+    row.attempted = bool(getattr(provider, "last_attempted", row.attempted))
+    row.http_status = getattr(provider, "last_status_code", row.http_status)
+    row.raw_count = int(getattr(provider, "last_raw_count", row.raw_count or 0) or 0)
+    row.normalized_count = int(getattr(provider, "last_normalized_count", row.normalized_count or 0) or 0)
+    row.accepted_count = accepted
+    row.rejected_count = rejected
+    row.main_rejection_reason = main_reason(reasons)
 
 
 def create_search_run(settings: Settings, *, status: str = "pending") -> int:
@@ -90,54 +134,49 @@ async def run_search(
             rejected = 0
             for provider in providers:
                 status = provider.status()
-                session.add(
-                    ProviderStatusRow(
-                        run_id=run.id,
-                        name=status.name,
-                        enabled=status.enabled,
-                        ok=status.ok,
-                        warnings_json=json.dumps(status.warnings),
-                        error=status.error,
-                    )
-                )
+                row = provider_status_row(run.id, status)
+                session.add(row)
                 if not status.enabled:
                     continue
+                provider_accepted = 0
+                provider_rejected = 0
+                provider_reasons: Counter[str] = Counter()
                 try:
                     candidates = await provider.search(destinations, date_pairs, limit=settings.top_results_limit)
                 except Exception as exc:  # provider isolation
                     rejected += 1
-                    session.add(
-                        ProviderStatusRow(
-                            run_id=run.id,
-                            name=provider.name,
-                            enabled=True,
-                            ok=False,
-                            warnings_json="[]",
-                            error=scrub_text(str(exc))[:500],
-                        )
-                    )
+                    row.ok = False
+                    row.error = scrub_text(str(exc))[:500]
+                    row.attempted = bool(getattr(provider, "last_attempted", True))
+                    row.http_status = getattr(provider, "last_status_code", None)
+                    row.rejected_count = 1
+                    row.main_rejection_reason = "provider error (1)"
                     continue
                 for deal in candidates:
-                    ok, _reasons = validate_deal(deal, settings)
+                    ok, reasons = validate_deal(deal, settings)
                     if ok and deal.actionable:
                         all_deals.append(deal)
+                        provider_accepted += 1
                     else:
                         rejected += 1
+                        provider_rejected += 1
+                        provider_reasons.update(rejection_reasons(deal, reasons))
+                if row.raw_count == 0:
+                    row.raw_count = len(candidates)
+                if row.normalized_count == 0:
+                    row.normalized_count = len(candidates)
+                enrich_status(row, provider, accepted=provider_accepted, rejected=provider_rejected, reasons=provider_reasons)
             if "bus" in mode_set:
                 bus_provider = FlixBusRapidApiProvider(settings)
                 status = bus_provider.status()
-                session.add(
-                    ProviderStatusRow(
-                        run_id=run.id,
-                        name=status.name,
-                        enabled=status.enabled,
-                        ok=status.ok,
-                        warnings_json=json.dumps(status.warnings),
-                        error=status.error,
-                    )
-                )
+                row = provider_status_row(run.id, status)
+                session.add(row)
                 if status.enabled and date_pairs:
                     outbound, ret, _nights = date_pairs[0]
+                    bus_accepted = 0
+                    bus_rejected = 0
+                    bus_raw = 0
+                    bus_reasons: Counter[str] = Counter()
                     for destination in destinations[: max(1, min(len(destinations), settings.top_results_limit))]:
                         try:
                             offers = await bus_provider.search_roundtrip(
@@ -145,35 +184,32 @@ async def run_search(
                             )
                         except Exception as exc:
                             rejected += 1
-                            session.add(
-                                ProviderStatusRow(
-                                    run_id=run.id,
-                                    name=bus_provider.name,
-                                    enabled=True,
-                                    ok=False,
-                                    warnings_json="[]",
-                                    error=scrub_text(str(exc))[:500],
-                                )
-                            )
+                            bus_rejected += 1
+                            bus_reasons.update(["provider error"])
+                            row.ok = False
+                            row.error = scrub_text(str(exc))[:500]
                             continue
+                        bus_raw += len(offers)
                         for offer in offers:
                             deal = offer.to_deal_candidate()
-                            ok, _reasons = validate_deal(deal, settings)
+                            ok, reasons = validate_deal(deal, settings)
                             if ok and deal.actionable:
                                 all_deals.append(deal)
+                                bus_accepted += 1
                             else:
                                 rejected += 1
+                                bus_rejected += 1
+                                bus_reasons.update(rejection_reasons(deal, reasons))
                     if bus_provider.last_error:
-                        session.add(
-                            ProviderStatusRow(
-                                run_id=run.id,
-                                name=bus_provider.name,
-                                enabled=True,
-                                ok=False,
-                                warnings_json="[]",
-                                error=scrub_text(bus_provider.last_error),
-                            )
-                        )
+                        row.ok = False
+                        row.error = scrub_text(bus_provider.last_error)
+                    row.attempted = bool(getattr(bus_provider, "last_path", None))
+                    row.http_status = bus_provider.last_status_code
+                    row.raw_count = bus_raw
+                    row.normalized_count = bus_raw
+                    row.accepted_count = bus_accepted
+                    row.rejected_count = bus_rejected
+                    row.main_rejection_reason = main_reason(bus_reasons)
             sorted_deals = sort_deals(all_deals)[: settings.top_results_limit]
             inserted = save_deals(session, run, sorted_deals)
             run.status = "completed"

@@ -33,10 +33,17 @@ class SerpApiSmokeResult:
 class SerpApiGoogleFlightsProvider(FlightProvider):
     name = "serpapi"
 
+    def __init__(self, settings) -> None:
+        super().__init__(settings)
+        self.last_attempted = False
+        self.last_status_code: int | None = None
+        self.last_raw_count = 0
+        self.last_normalized_count = 0
+
     def status(self) -> ProviderStatus:
         if not self.settings.serpapi_api_key:
-            return ProviderStatus(self.name, enabled=False, warnings=["SERPAPI_API_KEY missing"])
-        return ProviderStatus(self.name, enabled=True)
+            return ProviderStatus(self.name, enabled=False, warnings=["SERPAPI_API_KEY missing"], key_present=False)
+        return ProviderStatus(self.name, enabled=True, key_present=True)
 
     async def search(
         self,
@@ -61,9 +68,17 @@ class SerpApiGoogleFlightsProvider(FlightProvider):
                         adults=self.settings.adults,
                         bags=self.settings.checked_bags,
                     )
+                    self.last_attempted = True
                     response = await client.get(SERPAPI_URL, params=params)
+                    self.last_status_code = response.status_code
                     response.raise_for_status()
                     payload = response.json()
+                    raw_count = sum(
+                        len(payload.get(key) or [])
+                        for key in ("best_flights", "other_flights", "flights")
+                        if isinstance(payload.get(key), list)
+                    )
+                    self.last_raw_count += raw_count
                     parsed = parse_serpapi_payload(
                         payload,
                         origin=self.settings.origin_airport,
@@ -71,7 +86,8 @@ class SerpApiGoogleFlightsProvider(FlightProvider):
                         outbound=outbound,
                         ret=ret,
                     )
-                    deals.extend([deal for deal in parsed if deal.actionable])
+                    self.last_normalized_count += len(parsed)
+                    deals.extend(parsed)
                     await asyncio.sleep(0.2)
                     if len(deals) >= limit:
                         return deals[:limit]

@@ -4,8 +4,13 @@
 
 Travel Scrapping MVP construit localement :
 
+- Étape 01 - Archives numerotees chronologiquement dans `docs/tasks/archive/001-...` a `013-...`.
+- Étape 02 - Historique web enrichi avec Date de lancement du run via `SearchRun.started_at`.
+- Étape 03 - Diagnostics fournisseurs visibles par run: actif, cle, appel, HTTP/erreur, brut, normalise, accepte, rejete, raison principale.
+- Étape 04 - Message "aucune offre" contextualise par compteurs reels.
+- Étape 05 - Correction absence de resultats diagnostiquables: SerpApi compte offres non actionnables, Travelpayouts sans marker reste diagnostique, filtre bus sans rejet `origin mismatch`.
 - Étape 01 - Inspection correction date de fin et suivi numerote terminee.
-- Étape 02 - Strategy mise a jour et tranche archivee dans `docs/tasks/archive/2026-06-20-end-date-numbered-steps.md`.
+- Étape 02 - Strategy mise a jour et tranche archivee dans `docs/tasks/archive/012-end-date-numbered-steps.md`.
 - FastAPI + HTMX dashboard sans auth, host par défaut `127.0.0.1`.
 - SQLite avec runs, deals, observations prix, statuts providers.
 - Modele commun d'offre avion/bus avec resultats principaux limites a `actionable=true`.
@@ -39,5 +44,5 @@ Aucun sweep live large lancé. FlixBus live teste avec `RAPIDAPI_KEY`, mais Rapi
 
 ## Prochaine tranche
 
-Étape 01 - Utiliser le parcours front non bloquant `/search` -> `/results?run_id=...` sur donnees reelles.
-Étape 02 - Verifier abonnement/quota RapidAPI Flixbus2 avant tout nouveau smoke live bus.
+Étape 01 - Verifier abonnement/quota FlixBus RapidAPI avant nouveau smoke live bus: dernier smoke HTTP `429 Too many requests`.
+Étape 02 - Ajuster budget ou cible SerpApi seulement apres decision utilisateur: dernier smoke `4` offres brutes, `3` rejetees par budget.

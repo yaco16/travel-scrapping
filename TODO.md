@@ -1,4 +1,4 @@
 # TODO
 
-- Étape 01 - Utiliser le parcours front non bloquant `/search` puis `/results?run_id=...` sur donnees reelles.
-- Étape 02 - Verifier abonnement/quota RapidAPI Flixbus2 avant nouveau smoke live: l'API retourne `403/429` malgre `RAPIDAPI_KEY`.
+- Étape 01 - Verifier abonnement/quota FlixBus RapidAPI avant nouveau smoke live bus: HTTP `429 Too many requests`.
+- Étape 02 - Decider explicitement si le budget `< 100 EUR` doit rester strict apres smoke SerpApi: `4` brutes, `3` rejetees par budget.

@@ -166,6 +166,14 @@ class ProviderStatusRow(Base):
     ok: Mapped[bool] = mapped_column(Boolean)
     warnings_json: Mapped[str] = mapped_column(Text, default="[]")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    key_present: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempted: Mapped[bool] = mapped_column(Boolean, default=False)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    raw_count: Mapped[int] = mapped_column(Integer, default=0)
+    normalized_count: Mapped[int] = mapped_column(Integer, default=0)
+    accepted_count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0)
+    main_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class AirportMetadata(Base):
@@ -228,6 +236,16 @@ def migrate_sqlite(engine) -> None:
         "missing_fields_json": "TEXT DEFAULT '[]'",
         "raw_debug_path": "TEXT",
     }
+    provider_status_columns = {
+        "key_present": "BOOLEAN DEFAULT 0",
+        "attempted": "BOOLEAN DEFAULT 0",
+        "http_status": "INTEGER",
+        "raw_count": "INTEGER DEFAULT 0",
+        "normalized_count": "INTEGER DEFAULT 0",
+        "accepted_count": "INTEGER DEFAULT 0",
+        "rejected_count": "INTEGER DEFAULT 0",
+        "main_rejection_reason": "TEXT",
+    }
     with engine.begin() as conn:
         existing = {row[1] for row in conn.execute(text("PRAGMA table_info(price_observations)"))}
         for name, column_type in columns.items():
@@ -237,6 +255,10 @@ def migrate_sqlite(engine) -> None:
         for name, column_type in deal_columns.items():
             if name not in existing_deals:
                 conn.execute(text(f"ALTER TABLE deals ADD COLUMN {name} {column_type}"))
+        existing_statuses = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_statuses)"))}
+        for name, column_type in provider_status_columns.items():
+            if name not in existing_statuses:
+                conn.execute(text(f"ALTER TABLE provider_statuses ADD COLUMN {name} {column_type}"))
 
 
 @contextmanager

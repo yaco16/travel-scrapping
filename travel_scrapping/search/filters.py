@@ -12,7 +12,8 @@ def validate_deal(deal: DealCandidate, settings: Settings, *, today: date | None
     today = today or date.today()
     normalized_nights = (deal.return_date - deal.outbound_date).days
     deal.nights = normalized_nights
-    if deal.origin_airport != settings.origin_airport:
+    is_bus = deal.transport_mode == "bus"
+    if not is_bus and deal.origin_airport != settings.origin_airport:
         reasons.append("origin mismatch")
     if deal.return_date <= deal.outbound_date or normalized_nights < 1:
         reasons.append("invalid return date")
@@ -28,7 +29,6 @@ def validate_deal(deal: DealCandidate, settings: Settings, *, today: date | None
         reasons.append("non-EUR price without conversion")
     if (deal.total_price_eur or 0) >= settings.max_roundtrip_price_eur:
         reasons.append("over budget")
-    is_bus = deal.transport_mode == "bus"
     if not is_bus and deal.max_layover_hours is not None and deal.max_layover_hours > settings.max_layover_hours:
         reasons.append("layover too long")
     if deal.has_overnight_airport and not settings.allow_overnight_airport:

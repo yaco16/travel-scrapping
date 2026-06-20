@@ -13,15 +13,21 @@ class TravelpayoutsProvider(FlightProvider):
 
     def status(self) -> ProviderStatus:
         if not self.settings.travelpayouts_token:
-            return ProviderStatus(self.name, enabled=False, warnings=["TRAVELPAYOUTS_TOKEN missing"])
+            return ProviderStatus(
+                self.name,
+                enabled=False,
+                warnings=["TRAVELPAYOUTS_TOKEN missing"],
+                key_present=False,
+            )
         if not self.settings.travelpayouts_marker:
             warning = "Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant"
             return ProviderStatus(
                 self.name,
                 enabled=self.settings.include_indicative,
                 warnings=[warning],
+                key_present=True,
             )
-        return ProviderStatus(self.name, enabled=True, warnings=[])
+        return ProviderStatus(self.name, enabled=True, warnings=[], key_present=True)
 
     async def search(
         self,

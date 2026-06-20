@@ -37,6 +37,8 @@ templates.env.filters["booking_display"] = presentation.booking_display
 templates.env.filters["mode_display"] = presentation.mode_display
 templates.env.filters["duration_display"] = presentation.duration_display
 templates.env.filters["provider_status_display"] = presentation.provider_status_display
+templates.env.filters["date_time"] = presentation.date_time
+templates.env.filters["yes_no"] = presentation.yes_no
 router = APIRouter()
 TERMINAL_RUN_STATUSES = {"completed", "failed"}
 
@@ -64,7 +66,22 @@ def diagnostics_context(settings, session, run: SearchRun | None = None) -> dict
     if run is None:
         run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
     latest_statuses = latest_provider_statuses(session, run.id if run else None)
-    flixbus_status = latest_statuses.get("flixbus_rapidapi")
+    flixbus_status = latest_statuses.get("flixbus") or latest_statuses.get("flixbus_rapidapi")
+    raw_total = sum(int(status.raw_count or 0) for status in latest_statuses.values() if status.enabled)
+    normalized_total = sum(int(status.normalized_count or 0) for status in latest_statuses.values() if status.enabled)
+    accepted_total = int(run.accepted_count or 0) if run else 0
+    rejected_total = int(run.rejected_count or 0) if run else 0
+    reasons = [status.main_rejection_reason for status in latest_statuses.values() if status.main_rejection_reason]
+    main_reason = reasons[0] if reasons else "raison non disponible"
+    if raw_total == 0:
+        no_offer_message = "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs."
+    elif rejected_total:
+        no_offer_message = f"Aucune offre exploitable trouvée. {rejected_total} offres rejetées : {main_reason}."
+    else:
+        no_offer_message = (
+            "Aucune offre exploitable trouvée. "
+            f"{raw_total} offres reçues, {normalized_total} offres normalisées, 0 offre affichable."
+        )
     return {
         "serpapi_key_present": bool(settings.serpapi_api_key),
         "serpapi_last_status": "non disponible",
@@ -78,6 +95,12 @@ def diagnostics_context(settings, session, run: SearchRun | None = None) -> dict
         "rapidapi_key_present": bool(settings.rapidapi_key),
         "flixbus_last_status": presentation.provider_status_display(flixbus_status),
         "flixbus_last_json": "data/debug/",
+        "raw_total": raw_total,
+        "normalized_total": normalized_total,
+        "accepted_total": accepted_total,
+        "rejected_total": rejected_total,
+        "main_rejection_reason": main_reason,
+        "no_offer_message": no_offer_message,
     }
 
 
@@ -135,6 +158,25 @@ def deal_payload(deal: Deal) -> dict[str, object]:
         "operator": deal.operator_name or presentation.airlines_display(deal.airlines_json),
         "booking_url": deal.booking_url,
     }
+
+
+def provider_diagnostics_payload(provider_statuses: dict[str, ProviderStatusRow]) -> list[dict[str, object]]:
+    return [
+        {
+            "provider": name,
+            "enabled": status.enabled,
+            "key_present": status.key_present,
+            "attempted": status.attempted,
+            "http_status": status.http_status,
+            "error": status.error,
+            "raw_count": status.raw_count or 0,
+            "normalized_count": status.normalized_count or 0,
+            "accepted_count": status.accepted_count or 0,
+            "rejected_count": status.rejected_count or 0,
+            "main_rejection_reason": status.main_rejection_reason,
+        }
+        for name, status in provider_statuses.items()
+    ]
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -220,6 +262,7 @@ def deals_api():
     factory = init_db(settings)
     with session_scope(factory) as session:
         run, deals, provider_statuses = latest_display_deals(settings, session)
+        diagnostics = diagnostics_context(settings, session, run)
         return JSONResponse(
             {
                 "run_id": run.id if run else None,
@@ -229,6 +272,8 @@ def deals_api():
                     name: presentation.provider_status_display(status)
                     for name, status in provider_statuses.items()
                 },
+                "provider_diagnostics": provider_diagnostics_payload(provider_statuses),
+                "no_offer_message": diagnostics["no_offer_message"],
             }
         )
 
