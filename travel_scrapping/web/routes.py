@@ -146,7 +146,12 @@ def home(request: Request):
         return templates.TemplateResponse(
             request,
             "home.html",
-            {"settings": safe_settings_dict(settings), "warnings": settings.warnings(), "run": run},
+            {
+                "settings": safe_settings_dict(settings),
+                "configuration_summary": presentation.configuration_summary(settings),
+                "warnings": settings.warnings(),
+                "run": run,
+            },
         )
 
 
@@ -202,6 +207,7 @@ def results(request: Request):
                 "run_terminal": bool(run and run.status in TERMINAL_RUN_STATUSES),
                 "deals": deals,
                 "provider_statuses": provider_statuses,
+                "processing_steps": presentation.processing_steps(run, len(deals)),
                 "email_enabled": settings.email_enabled,
                 "diagnostics": diagnostics_context(settings, session, run),
             },
@@ -217,6 +223,7 @@ def deals_api():
         return JSONResponse(
             {
                 "run_id": run.id if run else None,
+                "processing_steps": presentation.processing_steps(run, len(deals)),
                 "deals": [deal_payload(deal) for deal in deals],
                 "provider_statuses": {
                     name: presentation.provider_status_display(status)

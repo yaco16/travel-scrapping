@@ -3,6 +3,7 @@ from travel_scrapping.formatters import format_date_fr, format_datetime_fr, form
 
 def test_format_date_and_datetime_fr():
     assert format_date_fr("2026-07-30") == "30/07/26"
+    assert format_date_fr("2026-08-31") == "31/08/26"
     assert format_datetime_fr("2026-07-30T08:15:00+00:00") == "30/07/26 08:15"
 
 

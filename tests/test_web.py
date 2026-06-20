@@ -37,6 +37,19 @@ def test_main_menu_hides_sqlite(tmp_path, monkeypatch):
     assert '<a href="/history">Historique</a>' in response.text
 
 
+def test_dashboard_configuration_uses_end_date_and_french_formats(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    monkeypatch.setenv("SEARCH_END_DATE", "2026-08-31")
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Origine NCE · Budget &lt; 100,00 EUR · 3-5 nuits · jusqu&#39;au 31/08/26" in response.text
+    assert "jusqu&#39;au None" not in response.text
+
+
 def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
@@ -44,6 +57,7 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
 
     def fake_create_search_run(settings, *, status):
         assert settings.origin_airport == "NCE"
+        assert settings.search_end_date == date(2026, 8, 31)
         assert settings.min_nights == 3
         assert settings.max_nights == 5
         assert settings.max_roundtrip_price_eur == 100
@@ -64,7 +78,7 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
         data={
             "origin_airport": "NCE",
             "depart_date_min": "2026-07-01",
-            "depart_date_max": "2026-08-30",
+            "depart_date_max": "2026-08-31",
             "min_nights": "3",
             "max_nights": "5",
             "max_price": "100",
@@ -200,6 +214,8 @@ def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert f"Run #{run_id}" in response.text
     assert "<strong>pending</strong>" in response.text
+    assert "Étape 01 — Configuration chargée" in response.text
+    assert "Étape 02 — Recherche lancée" in response.text
     assert '<meta http-equiv="refresh" content="5">' in response.text
 
 
@@ -428,6 +444,13 @@ def test_deals_api_returns_normalized_deals_and_provider_status(tmp_path, monkey
     assert response.status_code == 200
     payload = response.json()
     assert payload["run_id"] == 1
+    assert payload["processing_steps"] == [
+        "Étape 01 — Configuration chargée",
+        "Étape 02 — Recherche lancée",
+        "Étape 03 — Résultats récupérés",
+        "Étape 04 — Résultats filtrés",
+        "Étape 05 — Résultats affichés",
+    ]
     assert payload["deals"][0]["destination"] == "Venise"
     assert payload["deals"][0]["dates"] == "30/07/26 - 02/08/26"
     assert payload["deals"][0]["nights"] == 3

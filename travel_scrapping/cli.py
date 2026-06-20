@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import date
+from typing import cast
 
 import typer
 from sqlalchemy import func, select
@@ -30,6 +31,8 @@ from travel_scrapping.email.brevo import send_deals_email
 from travel_scrapping.search.engine import latest_deals, run_search
 from travel_scrapping.search.normalizer import scrub_text
 from travel_scrapping.search.providers.serpapi_google_flights import serpapi_smoke
+from travel_scrapping.web.presentation import configuration_summary, processing_steps, short_date
+from travel_scrapping.formatters import format_price_fr
 
 app = typer.Typer()
 
@@ -65,9 +68,15 @@ def search(
         overrides["include_indicative"] = True
     if overrides:
         settings = settings.model_copy(update=overrides)
+    typer.echo("Étape 01 — Configuration chargée")
+    typer.echo(configuration_summary(settings))
+    typer.echo("Étape 02 — Recherche lancée")
     run_id = asyncio.run(
         run_search(settings, modes=modes, include_indicative=include_indicative, depart_from=parsed_depart_from)
     )
+    typer.echo("Étape 03 — Résultats récupérés")
+    typer.echo("Étape 04 — Résultats filtrés")
+    typer.echo("Étape 05 — Résultats affichés")
     typer.echo(f"run_id={run_id}")
     if send_email:
         _run, deals = latest_deals(settings)
@@ -79,8 +88,14 @@ def search(
 def top(limit: int = 50) -> None:
     run, deals = latest_deals(get_settings(), limit)
     typer.echo(f"run_id={run.id if run else 'none'}")
+    for step in processing_steps(run, len(deals)):
+        typer.echo(step)
     for deal in deals:
-        typer.echo(f"{deal.destination_airport} {deal.outbound_date}-{deal.return_date} {deal.total_price_eur:.2f} EUR")
+        typer.echo(
+            f"{deal.destination_airport} "
+            f"{short_date(cast(date | None, deal.outbound_date))}-{short_date(cast(date | None, deal.return_date))} "
+            f"{format_price_fr(deal.total_price_eur, 'EUR').replace(' €', ' EUR')}"
+        )
 
 
 @app.command()

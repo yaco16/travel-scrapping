@@ -84,3 +84,30 @@ def provider_status_display(status: Any | None) -> str:
     if error:
         return str(error)
     return "Erreur"
+
+
+def budget_display(value: float | int | Decimal | None) -> str:
+    return format_price_fr(value, "EUR", diagnostic=True).replace(" €", " EUR")
+
+
+def configuration_summary(settings: Any) -> str:
+    return (
+        f"Origine {settings.origin_airport} · "
+        f"Budget < {budget_display(settings.max_roundtrip_price_eur)} · "
+        f"{settings.min_nights}-{settings.max_nights} nuits · "
+        f"jusqu'au {format_date_fr(settings.effective_search_end_date, diagnostic=True)}"
+    )
+
+
+def processing_steps(run: Any | None, deals_count: int) -> list[str]:
+    steps = ["Étape 01 — Configuration chargée"]
+    if run is None:
+        return steps
+    steps.append("Étape 02 — Recherche lancée")
+    if getattr(run, "status", None) in {"running", "pending"}:
+        return steps
+    steps.append("Étape 03 — Résultats récupérés")
+    steps.append("Étape 04 — Résultats filtrés")
+    label = "Résultats affichés" if deals_count else "Aucun résultat affichable"
+    steps.append(f"Étape 05 — {label}")
+    return steps

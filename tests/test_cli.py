@@ -190,6 +190,9 @@ def test_cli_search_applies_overrides_and_sends_email(monkeypatch):
 
     assert result.exit_code == 0
     assert "run_id=42" in result.output
+    assert "Étape 01 — Configuration chargée" in result.output
+    assert "Origine cdg · Budget < 100,00 EUR · 4-5 nuits · jusqu'au 31/07/26" in result.output
+    assert "Étape 05 — Résultats affichés" in result.output
     assert '"sent": true' in result.output
     assert calls["settings"].origin_airport == "cdg"
     assert calls["settings"].search_end_date == date(2026, 7, 31)
@@ -220,7 +223,8 @@ def test_cli_top_prints_latest_deals(monkeypatch):
 
     assert result.exit_code == 0
     assert "run_id=7" in result.output
-    assert "BCN 2026-07-01-2026-07-04 49.00 EUR" in result.output
+    assert "Étape 01 — Configuration chargée" in result.output
+    assert "BCN 01/07/26-04/07/26 49,00 EUR" in result.output
 
 
 def test_cli_airports_refresh_counts_sources(tmp_path, monkeypatch):

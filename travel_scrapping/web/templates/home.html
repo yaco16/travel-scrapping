@@ -4,7 +4,7 @@
 {% for warning in warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
 <section>
   <h2>Configuration</h2>
-  <p>Origine {{ settings.origin_airport }} · Budget &lt; {{ settings.max_roundtrip_price_eur }} EUR · {{ settings.min_nights }}-{{ settings.max_nights }} nuits · jusqu'au {{ settings.date_to }}</p>
+  <p>{{ configuration_summary }}</p>
   <form action="/run" method="post"><button type="submit">Lancer recherche</button></form>
 </section>
 <section>

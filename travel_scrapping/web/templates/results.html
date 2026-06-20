@@ -6,6 +6,14 @@
 {% endblock %}
 {% block content %}
 <h1>Résultats</h1>
+<section>
+  <h2>Suivi</h2>
+  <ol class="status-list">
+  {% for step in processing_steps %}
+    <li>{{ step }}</li>
+  {% endfor %}
+  </ol>
+</section>
 {% if run %}
 <section>
   <h2>Run #{{ run.id }}</h2>

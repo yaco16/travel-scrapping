@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     default_currency: str = "EUR"
     default_locale: str = "fr-FR"
     default_market: str = "FR"
-    search_end_date: date = date(2026, 8, 30)
+    search_end_date: date = date(2026, 8, 31)
     date_to: date | None = None
     min_nights: int = 3
     max_nights: int = 5

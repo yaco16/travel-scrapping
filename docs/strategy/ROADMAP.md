@@ -4,10 +4,13 @@
 
 Travel Scrapping MVP construit localement :
 
+- Étape 01 - Inspection correction date de fin et suivi numerote terminee.
+- Étape 02 - Strategy mise a jour et tranche archivee dans `docs/tasks/archive/2026-06-20-end-date-numbered-steps.md`.
 - FastAPI + HTMX dashboard sans auth, host par défaut `127.0.0.1`.
 - SQLite avec runs, deals, observations prix, statuts providers.
 - Modele commun d'offre avion/bus avec resultats principaux limites a `actionable=true`.
-- Date grid NCE round-trip 3-5 nuits jusqu'au `SEARCH_END_DATE=2026-08-30`.
+- Étape 03 - Date grid NCE round-trip 3-5 nuits jusqu'au `SEARCH_END_DATE=2026-08-31`; rendu Configuration `jusqu'au 31/08/26`.
+- Étape 04 - Suivi numerote visible dans les resultats web/API/CLI.
 - Filtrage budget strict `< 100 EUR`, layover, air time, overnight airport.
 - Providers SerpAPI, FlixBus RapidAPI, Travelpayouts indicatif, Playwright safe skeleton, tous désactivables sans crash.
 - Resultats UI normalises : modes avion/bus, ville francaise, dates JJ/MM/AA, prix francais, operateur, duree, lien actionnable.
@@ -36,4 +39,5 @@ Aucun sweep live large lancé. FlixBus live teste avec `RAPIDAPI_KEY`, mais Rapi
 
 ## Prochaine tranche
 
-Utiliser le parcours front non bloquant `/search` -> `/results?run_id=...` sur donnees reelles, puis verifier abonnement/quota RapidAPI Flixbus2 avant tout nouveau smoke live bus.
+Étape 01 - Utiliser le parcours front non bloquant `/search` -> `/results?run_id=...` sur donnees reelles.
+Étape 02 - Verifier abonnement/quota RapidAPI Flixbus2 avant tout nouveau smoke live bus.
