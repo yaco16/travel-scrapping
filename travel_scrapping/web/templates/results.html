@@ -154,5 +154,8 @@
       {% endfor %}
     </table>
   </div>
+  {% if diagnostics.travelpayouts_marker_present == false %}
+  <p class="warning compact">Travelpayouts : endpoints nécessitant un marker désactivés, marker absent.</p>
+  {% endif %}
 </details>
 {% endblock %}
