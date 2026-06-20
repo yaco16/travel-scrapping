@@ -13,9 +13,20 @@ def test_dashboard_routes_return_200(tmp_path, monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
     client = TestClient(create_app())
-    for path in ["/", "/search", "/results", "/history", "/sqlite"]:
+    for path in ["/", "/results", "/history", "/sqlite"]:
         response = client.get(path)
         assert response.status_code == 200
+
+
+def test_search_redirects_to_home_with_303(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    client = TestClient(create_app())
+
+    response = client.get("/search", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
 
 
 def test_email_button_hidden_by_default(tmp_path, monkeypatch):
@@ -35,7 +46,22 @@ def test_main_menu_hides_sqlite(tmp_path, monkeypatch):
     response = client.get("/")
     assert response.status_code == 200
     assert '<a href="/sqlite">SQLite</a>' not in response.text
+    assert '<a href="/search">Recherche</a>' not in response.text
     assert '<a href="/history">Historique</a>' in response.text
+
+
+def test_home_keeps_search_form_and_hides_travelpayouts_marker_warning(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    monkeypatch.setenv("TRAVELPAYOUTS_TOKEN", "token")
+    monkeypatch.delenv("TRAVELPAYOUTS_MARKER", raising=False)
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert '<form action="/run" method="post" class="form-grid" data-run-form>' in response.text
+    assert "Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant" not in response.text
 
 
 def test_dashboard_configuration_uses_end_date_and_french_formats(tmp_path, monkeypatch):
@@ -107,11 +133,11 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
     }
 
 
-def test_search_form_prevents_double_submit(tmp_path, monkeypatch):
+def test_home_search_form_prevents_double_submit(tmp_path, monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
     client = TestClient(create_app())
-    response = client.get("/search")
+    response = client.get("/")
 
     assert response.status_code == 200
     assert "data-run-form" in response.text
@@ -223,10 +249,53 @@ def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert f"Run #{run_id}" in response.text
-    assert "<strong>pending</strong>" in response.text
+    assert '<strong class="status-badge pending-blink">pending</strong>' in response.text
     assert "Étape 01 — Configuration chargée" in response.text
     assert "Étape 02 — Recherche lancée" in response.text
+    assert 'class="step-spinner"' in response.text
+    assert '<span class="step-state pending-blink">pending</span>' in response.text
     assert '<meta http-equiv="refresh" content="5">' in response.text
+
+
+def test_results_tabs_use_htmx_and_anchor_fallback(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=0, rejected_count=0)
+        session.add(run)
+        session.flush()
+        run_id = run.id
+
+    client = TestClient(create_app())
+    response = client.get(f"/results?run_id={run_id}")
+
+    assert response.status_code == 200
+    assert 'id="results-offers-panel"' in response.text
+    assert 'hx-target="#results-offers-panel"' in response.text
+    assert 'hx-swap="outerHTML"' in response.text
+    assert f'href="/results?run_id={run_id}&mode=flight#results-offers-panel"' in response.text
+    assert f'hx-push-url="/results?run_id={run_id}&mode=flight"' in response.text
+
+
+def test_results_htmx_request_returns_offers_panel_only(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=0, rejected_count=0)
+        session.add(run)
+        session.flush()
+        run_id = run.id
+
+    client = TestClient(create_app())
+    response = client.get(f"/results?run_id={run_id}&mode=bus", headers={"HX-Request": "true"})
+
+    assert response.status_code == 200
+    assert response.text.lstrip().startswith('<div id="results-offers-panel">')
+    assert "results-hero" not in response.text
 
 
 def test_history_shows_run_start_date_between_id_and_status(tmp_path, monkeypatch):
@@ -391,6 +460,49 @@ def test_results_display_api_ninjas_cached_city_not_iata(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert "Venise" in response.text
     assert ">VCE<" not in response.text
+
+
+def test_results_display_country_next_to_city(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=44)
+        session.add(run)
+        session.flush()
+        session.add(
+            Deal(
+                run_id=run.id,
+                source="serpapi_google_flights_deals",
+                transport_mode="flight",
+                origin_airport="NCE",
+                destination_airport="STN",
+                destination_city="Londres",
+                destination_country="GB",
+                outbound_date=date(2026, 7, 21),
+                return_date=date(2026, 7, 28),
+                nights=7,
+                total_price=44,
+                currency="EUR",
+                total_price_eur=44,
+                airlines_json='["Ryanair"]',
+                operator_name="Ryanair",
+                booking_url="https://example.test/stn",
+                actionable=True,
+                confidence="high",
+                fetched_at=now,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert "Londres" in response.text
+    assert "Royaume-Uni" in response.text
+    assert "44,00 €" in response.text
 
 
 def test_results_do_not_render_raw_warnings_json(tmp_path, monkeypatch):
@@ -728,9 +840,17 @@ def test_results_use_run_snapshot_and_show_cheapest_first(tmp_path, monkeypatch)
     assert "44,00 €" in response.text
     assert "2 offres affichées sur 2 acceptées" in response.text
     assert "Meilleur prix" in response.text
+    assert 'class="deal-card best"' in response.text
+    assert 'class="badge best-badge">Meilleur prix</span>' in response.text
     assert "Budget max 150,00 EUR · 1-7 nuits" in response.text
     assert "Budget max 100,00 EUR · 3-5 nuits" not in response.text
     assert response.text.index("44,00 €") < response.text.index("71,00 €")
+
+
+def test_country_display_known_codes():
+    assert web_routes.country_display("GB") == "Royaume-Uni"
+    assert web_routes.country_display("IT") == "Italie"
+    assert web_routes.country_display("ES") == "Espagne"
 
 
 def test_home_distinguishes_default_config_and_latest_run_snapshot(tmp_path, monkeypatch):

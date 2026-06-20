@@ -1,0 +1,68 @@
+<div id="results-offers-panel">
+{% if run %}
+<nav class="tabs" aria-label="Filtres résultats">
+  <a class="{{ 'active' if mode == 'all' else '' }}"
+     href="/results?run_id={{ run.id }}#results-offers-panel"
+     hx-get="/results?run_id={{ run.id }}"
+     hx-target="#results-offers-panel"
+     hx-select="#results-offers-panel"
+     hx-swap="outerHTML"
+     hx-push-url="/results?run_id={{ run.id }}">Tous</a>
+  <a class="{{ 'active' if mode == 'flight' else '' }}"
+     href="/results?run_id={{ run.id }}&mode=flight#results-offers-panel"
+     hx-get="/results?run_id={{ run.id }}&mode=flight"
+     hx-target="#results-offers-panel"
+     hx-select="#results-offers-panel"
+     hx-swap="outerHTML"
+     hx-push-url="/results?run_id={{ run.id }}&mode=flight">Avion</a>
+  <a class="{{ 'active' if mode == 'bus' else '' }}"
+     href="/results?run_id={{ run.id }}&mode=bus#results-offers-panel"
+     hx-get="/results?run_id={{ run.id }}&mode=bus"
+     hx-target="#results-offers-panel"
+     hx-select="#results-offers-panel"
+     hx-swap="outerHTML"
+     hx-push-url="/results?run_id={{ run.id }}&mode=bus">Bus</a>
+</nav>
+{% endif %}
+
+<section class="panel">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">Liste</p>
+      <h2>Offres</h2>
+    </div>
+    {% if run %}<span class="count-pill">{{ accepted_display_count }} offres affichées sur {{ accepted_total_count }} acceptées</span>{% endif %}
+  </div>
+  {% if deals %}
+  <div class="results-list">
+    {% for deal in deals %}
+    <article class="deal-card {{ 'best' if deal.total_price_eur == best_price else '' }}">
+      <div class="deal-main">
+        <div>
+          <div class="badge-row">
+            <span class="badge">{{ deal.transport_mode|mode_display }}</span>
+            <span class="badge muted">{{ deal.provider or deal.source }}</span>
+            <span class="badge muted">{{ deal.confidence }}</span>
+            {% if deal.total_price_eur == best_price %}<span class="badge best-badge">Meilleur prix</span>{% endif %}
+          </div>
+          <h3><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a>{% if deal.destination_country %}<span class="destination-country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h3>
+          <p>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits · {{ deal.operator_name or deal.airlines_json|airlines_display }}</p>
+        </div>
+        <div class="price-block">
+          <strong>{{ deal.total_price_eur|price_display }}</strong>
+          <span>{{ deal.stops_count if deal.stops_count is not none else 0 }} escale(s)</span>
+        </div>
+      </div>
+      <div class="deal-footer">
+        <span>Durée {{ deal.duration_minutes|duration_display }}</span>
+        <span>Provider {{ deal.provider_status|provider_status_display }}</span>
+        <a href="{{ deal.booking_url }}" rel="noreferrer">Voir l’offre</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>{{ diagnostics.no_offer_message }}</p>
+  {% endif %}
+</section>
+</div>

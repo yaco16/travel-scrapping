@@ -4,6 +4,12 @@
 
 Travel Scrapping MVP construit localement :
 
+- Étape 01 - Tranche `017-ui-results-polish` archivee dans `docs/tasks/archive/017-ui-results-polish.md`.
+- Étape 02 - `/search` redirige vers `/` en `303`; le menu principal garde Dashboard, Résultats, Historique; la home conserve le formulaire de recherche.
+- Étape 03 - La home masque uniquement le warning `Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant`; `/results` conserve le diagnostic Travelpayouts.
+- Étape 04 - `/results` affiche spinner pipeline, `pending` clignotant, auto-refresh non terminal, onglets HTMX Tous/Avion/Bus sans retour haut avec fallback ancre.
+- Étape 05 - Le meilleur prix est vert, les pays destinations s'affichent près des villes via `destination_country` ou fallback aeroport, codes connus traduits en francais.
+- Étape 06 - Documentation providers ajoute `Distribusion` comme candidat futur bus/train Europe; `Transitland/GTFS` et `OSDM` restent documentation seulement.
 - Étape 01 - Tranche `016-run-snapshot-results-ui-providers` archivee dans `docs/tasks/archive/016-run-snapshot-results-ui-providers.md`.
 - Étape 02 - Cause `44,00 €` corrigee: `/results` reappliquait `.env` courant `100 EUR` / `3-5 nuits` au lieu du snapshot run; STN `44,00 €` etait en DB/agregat mais filtree.
 - Étape 03 - `search_runs` stocke `config_json` et `providers_json`; `/results`, homepage et historique affichent les chiffres/config du run, avec fallback legacy depuis diagnostics provider.

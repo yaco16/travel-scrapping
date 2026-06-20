@@ -44,6 +44,26 @@ Limites: accès partenaire non garanti, conditions commerciales, endpoints dispo
 
 Utilité projet: intéressant si accès officiel obtenu; non prioritaire sans partenariat.
 
+## Bus et train Europe
+
+### Distribusion
+
+Recommandation: meilleur candidat futur pour bus + train Europe.
+
+Intérêt: agrégateur transport terrestre, bus/train, nombreux transporteurs, surface API plus adaptée aux offres terrestres que les probes isolés.
+
+Limite: accès commercial/sandbox à obtenir avant toute intégration fiable.
+
+Prochaine étape: demander un accès demo/sandbox, puis créer un provider `ground_transport_distribusion` désactivé par défaut tant que les credentials sont absents.
+
+### Transitland/GTFS
+
+Utile pour découvrir opérateurs, arrêts, lignes et horaires. Pas adapté aux prix ni à la réservation.
+
+### OSDM
+
+Utile pour le rail, surtout comme standard d'échange. Pour ce MVP, départ plus réaliste via agrégateur avant intégration directe.
+
 ## Décision
 
 Priorité actuelle: fiabiliser `serpapi_google_flights_deals`, snapshot run et UI. Aucune nouvelle API implémentée dans cette tranche.

@@ -27,11 +27,15 @@ def test_template_jinja_filters_are_registered_in_app_environment():
 def test_key_ui_elements_exist_in_templates():
     assert templates.env.loader is not None
     results, _, _ = templates.env.loader.get_source(templates.env, "results.html")
+    offers, _, _ = templates.env.loader.get_source(templates.env, "_results_offers.html")
     home, _, _ = templates.env.loader.get_source(templates.env, "home.html")
 
     assert "results-hero" in results
     assert "metric-card" in results
-    assert "offres affichées sur" in results
-    assert "Meilleur prix" in results
+    assert "offres affichées sur" in offers
+    assert "Meilleur prix" in offers
     assert "Providers désactivés" in results
+    assert 'hx-target="#results-offers-panel"' in offers
+    assert "step-spinner" in results
+    assert "pending-blink" in results
     assert "Dernier run" in home
