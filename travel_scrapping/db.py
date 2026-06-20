@@ -64,6 +64,9 @@ class Deal(Base):
     operator_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     stops_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    average_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    discount_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     actionable: Mapped[bool] = mapped_column(Boolean, default=True)
     missing_fields_json: Mapped[str] = mapped_column(Text, default="[]")
     raw_debug_path: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -174,6 +177,8 @@ class ProviderStatusRow(Base):
     accepted_count: Mapped[int] = mapped_column(Integer, default=0)
     rejected_count: Mapped[int] = mapped_column(Integer, default=0)
     main_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_params_json: Mapped[str] = mapped_column(Text, default="{}")
+    destination_examples_json: Mapped[str] = mapped_column(Text, default="[]")
 
 
 class AirportMetadata(Base):
@@ -232,6 +237,9 @@ def migrate_sqlite(engine) -> None:
         "operator_name": "VARCHAR(128)",
         "duration_minutes": "INTEGER",
         "stops_count": "INTEGER",
+        "average_price": "FLOAT",
+        "discount_percent": "FLOAT",
+        "image_url": "TEXT",
         "actionable": "BOOLEAN DEFAULT 1",
         "missing_fields_json": "TEXT DEFAULT '[]'",
         "raw_debug_path": "TEXT",
@@ -245,6 +253,8 @@ def migrate_sqlite(engine) -> None:
         "accepted_count": "INTEGER DEFAULT 0",
         "rejected_count": "INTEGER DEFAULT 0",
         "main_rejection_reason": "TEXT",
+        "request_params_json": "TEXT DEFAULT '{}'",
+        "destination_examples_json": "TEXT DEFAULT '[]'",
     }
     with engine.begin() as conn:
         existing = {row[1] for row in conn.execute(text("PRAGMA table_info(price_observations)"))}
@@ -312,6 +322,9 @@ def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
         operator_name=deal.operator_name,
         duration_minutes=deal.duration_minutes,
         stops_count=deal.stops_count,
+        average_price=deal.average_price,
+        discount_percent=deal.discount_percent,
+        image_url=deal.image_url,
         actionable=deal.actionable,
         missing_fields_json=json.dumps(deal.missing_fields),
         raw_debug_path=deal.raw_debug_path,

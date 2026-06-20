@@ -118,6 +118,9 @@ class DealCandidate:
     operator_name: str | None = None
     duration_minutes: int | None = None
     stops_count: int | None = None
+    average_price: float | None = None
+    discount_percent: float | None = None
+    image_url: str | None = None
     actionable: bool = True
     missing_fields: list[str] = field(default_factory=list)
     raw_debug_path: str | None = None

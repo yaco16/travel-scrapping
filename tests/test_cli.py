@@ -147,6 +147,7 @@ def test_cli_airports_import_and_diagnostics(tmp_path, monkeypatch):
 def test_cli_search_applies_overrides_and_sends_email(monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("MAX_ROUNDTRIP_PRICE_EUR", "150")
     calls = {}
 
     async def fake_run_search(settings, modes, include_indicative, depart_from):
@@ -191,7 +192,7 @@ def test_cli_search_applies_overrides_and_sends_email(monkeypatch):
     assert result.exit_code == 0
     assert "run_id=42" in result.output
     assert "Étape 01 — Configuration chargée" in result.output
-    assert "Origine cdg · Budget < 100,00 EUR · 4-5 nuits · jusqu'au 31/07/26" in result.output
+    assert "Origine cdg · Budget max 150,00 EUR · 4-5 nuits · départ du 01/07/26 au 31/07/26" in result.output
     assert "Étape 05 — Résultats affichés" in result.output
     assert '"sent": true' in result.output
     assert calls["settings"].origin_airport == "cdg"

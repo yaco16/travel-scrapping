@@ -20,11 +20,13 @@ class Settings(BaseSettings):
     default_currency: str = "EUR"
     default_locale: str = "fr-FR"
     default_market: str = "FR"
+    search_start_date: date | None = date(2026, 7, 1)
     search_end_date: date = date(2026, 8, 31)
     date_to: date | None = None
-    min_nights: int = 3
-    max_nights: int = 5
-    max_roundtrip_price_eur: float = 100
+    min_nights: int = 1
+    max_nights: int = 7
+    max_roundtrip_price_eur: float = 150
+    max_stops: int = 1
     max_air_time_hours: float = 5
     max_layover_hours: float = 3
     allow_direct: bool = True

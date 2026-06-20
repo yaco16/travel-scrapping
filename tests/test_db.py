@@ -27,8 +27,11 @@ def test_sqlite_persistence(tmp_path):
         nights=3,
         total_price=40,
         airlines=["easyJet"],
-        booking_url="https://example.test/book",
-    )
+            booking_url="https://example.test/book",
+            average_price=75,
+            discount_percent=33,
+            image_url="https://example.test/image.jpg",
+        )
     with session_scope(factory) as session:
         run = SearchRun(status="completed")
         session.add(run)
@@ -38,6 +41,10 @@ def test_sqlite_persistence(tmp_path):
     with session_scope(factory) as session:
         row = session.scalars(select(Deal)).one()
         assert row.destination_airport == "BCN"
+        assert row.run_id == 1
+        assert row.average_price == 75
+        assert row.discount_percent == 33
+        assert row.image_url == "https://example.test/image.jpg"
         observation = session.scalars(select(PriceObservation)).one()
         assert observation.run_id == 1
         assert observation.observed_at is not None

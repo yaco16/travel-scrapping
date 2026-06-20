@@ -18,7 +18,7 @@ from travel_scrapping.search.filters import validate_deal
 from travel_scrapping.search.normalizer import scrub_text
 from travel_scrapping.search.providers.base import FlightProvider
 from travel_scrapping.search.providers.playwright_probe import PlaywrightProbeProvider
-from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightsProvider
+from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightDealsProvider
 from travel_scrapping.search.providers.travelpayouts import TravelpayoutsProvider
 from travel_scrapping.search.scoring import sort_deals
 
@@ -39,7 +39,7 @@ def load_destinations(path: str = "config/destinations.yaml") -> list[Destinatio
 
 
 def build_providers(settings: Settings, *, include_indicative: bool = False) -> list[FlightProvider]:
-    providers: list[FlightProvider] = [SerpApiGoogleFlightsProvider(settings)]
+    providers: list[FlightProvider] = [SerpApiGoogleFlightDealsProvider(settings)]
     providers.append(TravelpayoutsProvider(settings))
     providers.append(PlaywrightProbeProvider(settings))
     return providers
@@ -76,6 +76,8 @@ def provider_status_row(run_id: int, status) -> ProviderStatusRow:
         accepted_count=status.accepted_count,
         rejected_count=status.rejected_count,
         main_rejection_reason=status.main_rejection_reason,
+        request_params_json=json.dumps(status.request_params),
+        destination_examples_json=json.dumps(status.destination_examples),
     )
 
 
@@ -87,6 +89,8 @@ def enrich_status(row: ProviderStatusRow, provider, *, accepted: int, rejected: 
     row.accepted_count = accepted
     row.rejected_count = rejected
     row.main_rejection_reason = main_reason(reasons)
+    row.request_params_json = json.dumps(getattr(provider, "last_public_params", {}) or {})
+    row.destination_examples_json = json.dumps(getattr(provider, "last_destination_examples", []) or [])
 
 
 def create_search_run(settings: Settings, *, status: str = "pending") -> int:
@@ -111,7 +115,7 @@ async def run_search(
     try:
         destinations = load_destinations()
         date_pairs = generate_roundtrip_dates(
-            today=depart_from or date.today(),
+            today=depart_from or settings.search_start_date or date.today(),
             date_to=settings.effective_search_end_date,
             min_nights=settings.min_nights,
             max_nights=settings.max_nights,

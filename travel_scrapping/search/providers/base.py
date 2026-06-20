@@ -22,6 +22,8 @@ class ProviderStatus:
     accepted_count: int = 0
     rejected_count: int = 0
     main_rejection_reason: str | None = None
+    request_params: dict[str, object] = field(default_factory=dict)
+    destination_examples: list[str] = field(default_factory=list)
 
 
 class FlightProvider(ABC):

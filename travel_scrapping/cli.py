@@ -29,8 +29,12 @@ from travel_scrapping.db import (
 )
 from travel_scrapping.email.brevo import send_deals_email
 from travel_scrapping.search.engine import latest_deals, run_search
+from travel_scrapping.search.filters import validate_deal
 from travel_scrapping.search.normalizer import scrub_text
-from travel_scrapping.search.providers.serpapi_google_flights import serpapi_smoke
+from travel_scrapping.search.providers.serpapi_google_flights import (
+    SerpApiGoogleFlightDealsProvider,
+    serpapi_smoke,
+)
 from travel_scrapping.web.presentation import configuration_summary, processing_steps, short_date
 from travel_scrapping.formatters import format_price_fr
 
@@ -50,6 +54,8 @@ def search(
     depart_to: str | None = None,
     min_nights: int | None = None,
     max_nights: int | None = None,
+    max_price: float | None = None,
+    max_stops: int | None = None,
     modes: str = "flight",
     include_indicative: bool = False,
 ) -> None:
@@ -58,12 +64,18 @@ def search(
     if origin:
         overrides["origin_airport"] = origin
     parsed_depart_from = date.fromisoformat(depart_from) if depart_from else None
+    if parsed_depart_from is not None:
+        overrides["search_start_date"] = parsed_depart_from
     if depart_to:
         overrides["search_end_date"] = date.fromisoformat(depart_to)
     if min_nights is not None:
         overrides["min_nights"] = min_nights
     if max_nights is not None:
         overrides["max_nights"] = max_nights
+    if max_price is not None:
+        overrides["max_roundtrip_price_eur"] = max_price
+    if max_stops is not None:
+        overrides["max_stops"] = max_stops
     if include_indicative:
         overrides["include_indicative"] = True
     if overrides:
@@ -274,6 +286,94 @@ def serpapi_smoke_cmd(
     typer.echo(f"booking_token={result.booking_tokens}")
     typer.echo(f"booking_options={result.booking_options}")
     typer.echo(f"json_debug={result.debug_path}")
+
+
+@app.command("google-flight-deals-smoke")
+def google_flight_deals_smoke_cmd(
+    origin: str = typer.Option("NCE", "--origin"),
+    depart_from: str = typer.Option("2026-07-01", "--depart-from"),
+    depart_to: str = typer.Option("2026-08-31", "--depart-to"),
+    min_nights: int = typer.Option(1, "--min-nights"),
+    max_nights: int = typer.Option(7, "--max-nights"),
+    max_price: float = typer.Option(150, "--max-price"),
+    max_stops: int = typer.Option(1, "--max-stops"),
+) -> None:
+    settings = get_settings().model_copy(
+        update={
+            "origin_airport": origin,
+            "search_start_date": date.fromisoformat(depart_from),
+            "search_end_date": date.fromisoformat(depart_to),
+            "min_nights": min_nights,
+            "max_nights": max_nights,
+            "max_roundtrip_price_eur": max_price,
+            "max_stops": max_stops,
+        }
+    )
+    if not settings.serpapi_api_key:
+        typer.echo("SERPAPI_API_KEY manquant")
+        return
+    provider = SerpApiGoogleFlightDealsProvider(settings)
+    deals = asyncio.run(provider.search([], [], limit=settings.top_results_limit))
+    accepted = []
+    rejected: list[tuple[str, list[str]]] = []
+    for deal in deals:
+        ok, reasons = validate_deal(deal, settings, today=settings.search_start_date)
+        if ok and deal.actionable:
+            accepted.append(deal)
+        else:
+            rejected.append((deal.route_key, reasons + [f"missing {field}" for field in deal.missing_fields]))
+    top = sorted(accepted, key=lambda deal: deal.total_price_eur or deal.total_price)[:10]
+    targets = {"NCE-SVQ": "absent", "NCE-STN": "absent", "NCE-FCO": "absent"}
+    for deal in deals:
+        route = f"{deal.origin_airport}-{deal.destination_airport}"
+        if route in targets:
+            ok, reasons = validate_deal(deal, settings, today=settings.search_start_date)
+            targets[route] = "présent accepté" if ok and deal.actionable else f"présent rejeté: {', '.join(reasons)}"
+    typer.echo("endpoint=google_flights_deals")
+    typer.echo(f"params={json.dumps(provider.last_public_params, ensure_ascii=False)}")
+    typer.echo(f"offres_brutes={provider.last_raw_count}")
+    typer.echo(f"offres_normalisées={provider.last_normalized_count}")
+    typer.echo(f"offres_acceptées={len(accepted)}")
+    typer.echo(f"offres_rejetées={len(rejected)}")
+    typer.echo("top_10_prix=" + ", ".join(f"{deal.destination_airport}:{deal.total_price_eur or deal.total_price}" for deal in top))
+    for route, status in targets.items():
+        typer.echo(f"{route}={status}")
+    if rejected:
+        reason_counts: dict[str, int] = {}
+        for _route, reasons in rejected:
+            for reason in reasons:
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        typer.echo(f"raisons_rejet={json.dumps(reason_counts, ensure_ascii=False)}")
+    typer.echo(f"json_debug={provider.last_debug_path}")
+
+
+@app.command("google-flight-deals-probes")
+def google_flight_deals_probes_cmd() -> None:
+    settings = get_settings()
+    if not settings.serpapi_api_key:
+        typer.echo("SERPAPI_API_KEY manquant")
+        return
+    probes = [
+        ("SVQ", date(2026, 7, 16), date(2026, 7, 23)),
+        ("STN", date(2026, 7, 21), date(2026, 7, 28)),
+        ("FCO", date(2026, 8, 28), date(2026, 8, 31)),
+    ]
+    for destination, depart, ret in probes:
+        result = asyncio.run(
+            serpapi_smoke(
+                api_key=settings.serpapi_api_key,
+                origin="NCE",
+                destination=destination,
+                depart=depart,
+                ret=ret,
+            )
+        )
+        payload_path = result.debug_path or ""
+        typer.echo(
+            f"NCE-{destination} {depart.isoformat()}->{ret.isoformat()} "
+            f"endpoint={result.endpoint} http={result.status_code} "
+            f"best={result.best_flights} other={result.other_flights} debug={payload_path}"
+        )
 
 
 @app.command("bus-stations-search")

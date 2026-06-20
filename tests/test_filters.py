@@ -30,7 +30,9 @@ def test_accept_under_budget_and_warn_unknowns():
 
 
 def test_reject_over_budget():
-    ok, reasons = validate_deal(deal(total_price=100), Settings(_env_file=None), today=date(2026, 6, 1))
+    ok, reasons = validate_deal(deal(total_price=150), Settings(_env_file=None), today=date(2026, 6, 1))
+    assert ok
+    ok, reasons = validate_deal(deal(total_price=151), Settings(_env_file=None), today=date(2026, 6, 1))
     assert not ok
     assert "over budget" in reasons
 
@@ -65,12 +67,19 @@ def test_reject_55_nights_after_normalization():
     assert "night range mismatch" in reasons
 
 
-def test_reject_return_after_search_end_date():
-    d = deal(outbound_date=date(2026, 8, 26), return_date=date(2026, 8, 31), nights=5)
+def test_reject_departure_after_search_end_date():
+    d = deal(outbound_date=date(2026, 8, 31), return_date=date(2026, 9, 5), nights=5)
+    ok, reasons = validate_deal(
+        d,
+        Settings(_env_file=None, search_end_date=date(2026, 8, 31), min_nights=3, max_nights=5),
+        today=date(2026, 6, 1),
+    )
+    assert ok
+    d = deal(outbound_date=date(2026, 9, 1), return_date=date(2026, 9, 6), nights=5)
     ok, reasons = validate_deal(
         d,
         Settings(_env_file=None, search_end_date=date(2026, 8, 30), min_nights=3, max_nights=5),
         today=date(2026, 6, 1),
     )
     assert not ok
-    assert "return after search end date" in reasons
+    assert "departure after search end date" in reasons

@@ -28,6 +28,14 @@ class SerpApiSmokeResult:
     booking_tokens: int
     booking_options: int
     debug_path: str | None
+    endpoint: str = "google_flights"
+    raw_count: int = 0
+    normalized_count: int = 0
+    accepted_count: int = 0
+    rejected_count: int = 0
+    top_prices: list[float] | None = None
+    destinations: list[str] | None = None
+    probes: dict[str, str] | None = None
 
 
 class SerpApiGoogleFlightsProvider(FlightProvider):
@@ -94,6 +102,63 @@ class SerpApiGoogleFlightsProvider(FlightProvider):
         return deals
 
 
+class SerpApiGoogleFlightDealsProvider(FlightProvider):
+    name = "serpapi_google_flights_deals"
+
+    def __init__(self, settings) -> None:
+        super().__init__(settings)
+        self.last_attempted = False
+        self.last_status_code: int | None = None
+        self.last_raw_count = 0
+        self.last_normalized_count = 0
+        self.last_public_params: dict[str, Any] = {}
+        self.last_destination_examples: list[str] = []
+        self.last_debug_path: str | None = None
+
+    def status(self) -> ProviderStatus:
+        if not self.settings.serpapi_api_key:
+            return ProviderStatus(self.name, enabled=False, warnings=["SERPAPI_API_KEY missing"], key_present=False)
+        return ProviderStatus(self.name, enabled=True, key_present=True)
+
+    async def search(
+        self,
+        destinations: list[Destination],
+        date_pairs: list[tuple],
+        *,
+        limit: int,
+    ) -> list[DealCandidate]:
+        if not self.status().enabled:
+            return []
+        start = self.settings.search_start_date or (date_pairs[0][0] if date_pairs else date.today())
+        params = serpapi_deals_params(
+            api_key=self.settings.serpapi_api_key,
+            origin=self.settings.origin_airport,
+            outbound_start=start,
+            outbound_end=self.settings.effective_search_end_date,
+            min_nights=self.settings.min_nights,
+            max_nights=self.settings.max_nights,
+            max_price=int(self.settings.max_roundtrip_price_eur),
+            max_stops=self.settings.max_stops,
+            currency=self.settings.default_currency,
+            adults=self.settings.adults,
+        )
+        self.last_public_params = public_params(params)
+        self.last_attempted = True
+        async with httpx.AsyncClient(timeout=45) as client:
+            response = await client.get(SERPAPI_URL, params=params)
+            self.last_status_code = response.status_code
+            response.raise_for_status()
+            payload = response.json()
+        self.last_raw_count = count_deals_items(payload)
+        self.last_debug_path = save_debug_json(
+            {"params": self.last_public_params, "payload": payload}, prefix="serpapi-google-flight-deals"
+        )
+        parsed = parse_google_flight_deals_payload(payload, origin=self.settings.origin_airport)
+        self.last_normalized_count = len(parsed)
+        self.last_destination_examples = destination_examples(parsed)
+        return parsed[:limit]
+
+
 def serpapi_base_params(
     *,
     api_key: str,
@@ -120,6 +185,37 @@ def serpapi_base_params(
         "stops": "1",
         "show_hidden": "true",
         "deep_search": "true",
+        "api_key": api_key,
+    }
+
+
+def serpapi_deals_params(
+    *,
+    api_key: str,
+    origin: str,
+    outbound_start: date | str,
+    outbound_end: date | str,
+    min_nights: int,
+    max_nights: int,
+    max_price: int,
+    max_stops: int,
+    currency: str = "EUR",
+    adults: int = 1,
+) -> dict[str, Any]:
+    start = outbound_start.isoformat() if isinstance(outbound_start, date) else outbound_start
+    end = outbound_end.isoformat() if isinstance(outbound_end, date) else outbound_end
+    return {
+        "engine": "google_flights_deals",
+        "departure_id": origin,
+        "type": "1",
+        "outbound_date": f"{start},{end}",
+        "trip_length": f"{min_nights},{max_nights}",
+        "max_price": str(max_price),
+        "stops": str(max_stops + 1),
+        "currency": currency,
+        "gl": "fr",
+        "hl": "fr",
+        "adults": adults,
         "api_key": api_key,
     }
 
@@ -161,7 +257,7 @@ def _airport_code(value: Any) -> str | None:
 
 
 def _booking_url(item: dict[str, Any]) -> str | None:
-    for key in ("booking_url", "link", "url"):
+    for key in ("booking_url", "link", "url", "google_flights_link", "serpapi_link", "flight_link", "serpapi_flight_link"):
         value = item.get(key)
         if isinstance(value, str) and value.startswith(("http://", "https://")):
             return value
@@ -178,7 +274,9 @@ def _booking_url(item: dict[str, Any]) -> str | None:
 
 
 def _price(item: dict[str, Any]) -> float | None:
-    value = item.get("price") or item.get("total_price")
+    value = item.get("price") or item.get("total_price") or item.get("extracted_price")
+    if isinstance(value, dict):
+        value = value.get("value") or value.get("amount") or value.get("extracted")
     if isinstance(value, str):
         value = value.replace("€", "").replace("EUR", "").replace(" ", "").replace(",", ".")
     if value is None:
@@ -189,8 +287,24 @@ def _price(item: dict[str, Any]) -> float | None:
         return None
 
 
+def _float_value(item: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, dict):
+            value = value.get("value") or value.get("amount") or value.get("extracted")
+        if isinstance(value, str):
+            value = value.replace("%", "").replace("€", "").replace("EUR", "").replace(" ", "").replace(",", ".")
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def _duration_minutes(item: dict[str, Any]) -> int | None:
-    value = item.get("total_duration") or item.get("duration")
+    value = item.get("total_duration") or item.get("duration") or item.get("flight_duration")
     try:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
@@ -210,6 +324,94 @@ def _stops(item: dict[str, Any]) -> int | None:
     if isinstance(flights, list) and flights:
         return max(0, len(flights) - 1)
     return None
+
+
+def _text_value(item: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            return value
+        if isinstance(value, dict):
+            for nested_key in ("name", "city", "id", "iata", "code", "link", "url"):
+                nested = value.get(nested_key)
+                if isinstance(nested, str) and nested:
+                    return nested
+    return None
+
+
+def _date_value(item: dict[str, Any], fallback: date | None, *keys: str) -> date:
+    for key in keys:
+        value = item.get(key)
+        if value:
+            return parse_date(str(value))
+    return _first_date(None, fallback)
+
+
+def _image_url(item: dict[str, Any]) -> str | None:
+    value = item.get("image") or item.get("thumbnail") or item.get("image_url")
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("url", "thumbnail", "image"):
+            nested = value.get(key)
+            if isinstance(nested, str):
+                return nested
+    return None
+
+
+def _destination_code(item: dict[str, Any]) -> str | None:
+    code = (
+        _airport_code(item.get("destination_airport"))
+        or _airport_code(item.get("arrival_airport"))
+        or _airport_code(item.get("destination"))
+        or _text_value(item, "arrival_airport_code", "destination_airport_code", "arrival_id", "iata", "airport_code")
+    )
+    if code and len(code) == 3 and code.isalpha():
+        return code.upper()
+    route = _text_value(item, "route", "title")
+    if route:
+        for sep in ("-", "→", "->"):
+            if sep in route:
+                tail = route.split(sep)[-1].strip()[:3]
+                if len(tail) == 3 and tail.isalpha():
+                    return tail.upper()
+    return code.upper() if code else None
+
+
+def _deal_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for key in ("destinations", "flight_deals", "deals", "best_flights", "other_flights", "flights"):
+        value = payload.get(key)
+        if not isinstance(value, list):
+            continue
+        for row in value:
+            if not isinstance(row, dict):
+                continue
+            nested = row.get("flights") or row.get("deals") or row.get("offers")
+            if isinstance(nested, list):
+                for nested_row in nested:
+                    if isinstance(nested_row, dict):
+                        merged = dict(row)
+                        merged.update(nested_row)
+                        items.append(merged)
+            else:
+                items.append(row)
+    return items
+
+
+def count_deals_items(payload: dict[str, Any]) -> int:
+    return len(_deal_items(payload))
+
+
+def destination_examples(deals: list[DealCandidate], limit: int = 10) -> list[str]:
+    examples: list[str] = []
+    for deal in deals:
+        label = deal.destination_city or deal.destination_airport
+        if label and label not in examples:
+            examples.append(label)
+        if len(examples) >= limit:
+            break
+    return examples
 
 
 def parse_serpapi_payload(
@@ -277,6 +479,61 @@ def parse_serpapi_payload(
                     raw_payload=scrub_payload(item),
                     confidence="high" if price and operator and booking_url else "medium",
                     warnings=warnings,
+                    missing_fields=missing,
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return deals
+
+
+def parse_google_flight_deals_payload(payload: dict[str, Any], *, origin: str) -> list[DealCandidate]:
+    deals: list[DealCandidate] = []
+    for item in _deal_items(payload):
+        try:
+            depart_date = _date_value(item, None, "outbound_date", "departure_date", "depart_date")
+            return_date = _date_value(item, None, "return_date", "inbound_date")
+            destination_code = _destination_code(item) or ""
+            destination_city = _text_value(item, "destination_city", "city", "destination_name", "name")
+            destination_country = _text_value(item, "country", "destination_country")
+            operator = _flight_operator(item) or "Google Flight Deals"
+            price = _price(item)
+            booking_url = _booking_url(item) or "https://www.google.com/travel/flights"
+            stops = _stops(item)
+            duration = _duration_minutes(item)
+            missing = []
+            if not destination_code:
+                missing.append("destination_airport")
+            if price is None:
+                missing.append("price_amount")
+            deals.append(
+                DealCandidate(
+                    source="serpapi_google_flights_deals",
+                    provider="serpapi_google_flights_deals",
+                    origin_airport=origin,
+                    destination_airport=destination_code,
+                    destination_city=destination_city,
+                    destination_country=destination_country,
+                    outbound_date=depart_date,
+                    return_date=return_date,
+                    nights=(return_date - depart_date).days,
+                    total_price=float(price or 0),
+                    currency=str(item.get("currency") or payload.get("currency") or "EUR"),
+                    airlines=[operator],
+                    is_direct=(stops == 0 if stops is not None else None),
+                    has_connection=(stops > 0 if stops is not None else None),
+                    outbound_duration_hours=(duration / 60 if duration else None),
+                    duration_minutes=duration,
+                    stops_count=stops,
+                    booking_url=booking_url,
+                    operator_name=operator,
+                    average_price=_float_value(item, "average_price", "typical_price", "price_average"),
+                    discount_percent=_float_value(
+                        item, "discount_percent", "discount_percentage", "price_drop_percent", "percentage_drop"
+                    ),
+                    image_url=_image_url(item),
+                    raw_payload=scrub_payload(item),
+                    confidence="high" if price and destination_code else "medium",
                     missing_fields=missing,
                 )
             )

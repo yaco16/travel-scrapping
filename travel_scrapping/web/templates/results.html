@@ -25,6 +25,26 @@
   {% endif %}
 </section>
 {% endif %}
+{% if diagnostics.google_flight_deals %}
+<section>
+  <h2>Comparaison Google Flight Deals</h2>
+  {% if diagnostics.google_flight_deals.wrong_endpoint %}
+  <p>La recherche ne peut pas reproduire Google Flight Deals : endpoint différent.</p>
+  {% endif %}
+  <p>Endpoint utilisé : {{ diagnostics.google_flight_deals.endpoint }}</p>
+  <p>Offres brutes : {{ diagnostics.google_flight_deals.raw_count }} · normalisées : {{ diagnostics.google_flight_deals.normalized_count }} · acceptées : {{ diagnostics.google_flight_deals.accepted_count }} · rejetées : {{ diagnostics.google_flight_deals.rejected_count }}</p>
+  <p>Raison principale de rejet : {{ diagnostics.google_flight_deals.main_rejection_reason or "Non disponible" }}</p>
+  <p>Exemples destinations reçues : {{ diagnostics.google_flight_deals.destination_examples|join(", ") }}</p>
+  <div class="table-wrapper">
+  <table>
+    <tr><th>Paramètre</th><th>Valeur</th></tr>
+    {% for key, value in diagnostics.google_flight_deals.params.items() %}
+    <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+{% endif %}
 {% if email_enabled %}
 <form action="/email" method="post"><button type="submit">Envoyer email</button></form>
 {% endif %}

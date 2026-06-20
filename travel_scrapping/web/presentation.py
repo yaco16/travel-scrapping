@@ -95,11 +95,13 @@ def budget_display(value: float | int | Decimal | None) -> str:
 
 
 def configuration_summary(settings: Any) -> str:
+    start = f"du {format_date_fr(settings.search_start_date, diagnostic=True)} " if settings.search_start_date else ""
     return (
         f"Origine {settings.origin_airport} · "
-        f"Budget < {budget_display(settings.max_roundtrip_price_eur)} · "
+        f"Budget max {budget_display(settings.max_roundtrip_price_eur)} · "
         f"{settings.min_nights}-{settings.max_nights} nuits · "
-        f"jusqu'au {format_date_fr(settings.effective_search_end_date, diagnostic=True)}"
+        f"départ {start}au {format_date_fr(settings.effective_search_end_date, diagnostic=True)} · "
+        f"{settings.max_stops} correspondance max"
     )
 
 

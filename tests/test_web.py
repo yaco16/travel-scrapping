@@ -40,13 +40,19 @@ def test_main_menu_hides_sqlite(tmp_path, monkeypatch):
 def test_dashboard_configuration_uses_end_date_and_french_formats(tmp_path, monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    monkeypatch.setenv("MAX_ROUNDTRIP_PRICE_EUR", "150")
+    monkeypatch.setenv("MIN_NIGHTS", "1")
+    monkeypatch.setenv("MAX_NIGHTS", "7")
     monkeypatch.setenv("SEARCH_END_DATE", "2026-08-31")
     client = TestClient(create_app())
 
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "Origine NCE · Budget &lt; 100,00 EUR · 3-5 nuits · jusqu&#39;au 31/08/26" in response.text
+    assert (
+        "Origine NCE · Budget max 150,00 EUR · 1-7 nuits · "
+        "départ du 01/07/26 au 31/08/26 · 1 correspondance max"
+    ) in response.text
     assert "jusqu&#39;au None" not in response.text
 
 
@@ -57,10 +63,12 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
 
     def fake_create_search_run(settings, *, status):
         assert settings.origin_airport == "NCE"
+        assert settings.search_start_date == date(2026, 7, 1)
         assert settings.search_end_date == date(2026, 8, 31)
         assert settings.min_nights == 3
         assert settings.max_nights == 5
         assert settings.max_roundtrip_price_eur == 100
+        assert settings.max_stops == 1
         assert status == "pending"
         return 42
 
@@ -82,6 +90,7 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
             "min_nights": "3",
             "max_nights": "5",
             "max_price": "100",
+            "max_stops": "1",
             "modes": ["flight", "bus"],
         },
         follow_redirects=False,
@@ -552,6 +561,7 @@ def test_results_show_zero_offer_diagnostic(tmp_path, monkeypatch):
     assert "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs." in response.text
     assert "<td>serpapi</td>" in response.text
     assert "<td>200</td>" in response.text
+    assert "La recherche ne peut pas reproduire Google Flight Deals : endpoint différent." in response.text
 
 
 def test_results_show_all_rejected_diagnostic_and_marker_warning(tmp_path, monkeypatch):
@@ -588,3 +598,46 @@ def test_results_show_all_rejected_diagnostic_and_marker_warning(tmp_path, monke
     assert response.status_code == 200
     assert "Aucune offre exploitable trouvée. 47 offres rejetées : over budget (47)." in response.text
     assert "Travelpayouts : endpoints nécessitant un marker désactivés" in response.text
+
+
+def test_results_show_google_flight_deals_comparison_and_destinations(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=3, rejected_count=1)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="serpapi_google_flights_deals",
+                enabled=True,
+                ok=True,
+                key_present=True,
+                attempted=True,
+                http_status=200,
+                raw_count=4,
+                normalized_count=3,
+                accepted_count=3,
+                rejected_count=1,
+                main_rejection_reason="too many stops (1)",
+                request_params_json=(
+                    '{"engine": "google_flights_deals", "departure_id": "NCE", '
+                    '"outbound_date": "2026-07-01,2026-08-31", "trip_length": "1,7", '
+                    '"max_price": "150", "stops": "2", "currency": "EUR", "gl": "fr", "hl": "fr"}'
+                ),
+                destination_examples_json='["Séville", "Londres", "Rome"]',
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert "Comparaison Google Flight Deals" in response.text
+    assert "Endpoint utilisé : google_flights_deals" in response.text
+    assert "Offres brutes : 4 · normalisées : 3 · acceptées : 3 · rejetées : 1" in response.text
+    assert "Séville, Londres, Rome" in response.text
+    assert "2026-07-01,2026-08-31" in response.text

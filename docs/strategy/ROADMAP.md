@@ -4,6 +4,11 @@
 
 Travel Scrapping MVP construit localement :
 
+- Étape 01 - Alignement Google Flight Deals archive dans `docs/tasks/archive/015-google-flight-deals-alignment.md`.
+- Étape 02 - Cause corrigee: recherche locale utilisait `google_flights` avec destination imposee, anciens parametres `100 EUR` / `3-5 nuits`, et filtre retour avant fin de fenetre; elle utilise maintenant `google_flights_deals` destination libre.
+- Étape 03 - Parametres Deals visibles et sans secret: `departure_id=NCE`, `outbound_date=2026-07-01,2026-08-31`, `trip_length=1,7`, `max_price=150`, `stops=2`, `currency=EUR`, `gl=fr`, `hl=fr`, `adults=1`, sans `return_date`.
+- Étape 04 - Diagnostic `Comparaison Google Flight Deals` disponible avec endpoint, brutes, normalisees, acceptees, rejetees, raison principale, params envoyes, destinations exemples.
+- Étape 05 - Smoke reel Deals valide: `30` brutes, `30` normalisees, `28` acceptees, `2` rejetees; STN `44 EUR` et FCO `50 EUR` presents; SVQ absent du global mais probe cible HTTP 200 avec `other=1`.
 - Étape 01 - Correction Jinja `/history` archivee dans `docs/tasks/archive/014-history-date-time-jinja.md`.
 - Étape 02 - Cause couverte: `history.html` utilise `run.started_at|date_time`; regression possible si l'environnement Jinja ne declare pas `date_time`.
 - Étape 03 - Tests de non-regression ajoutes: compilation de tous les templates via loader Jinja reel, filtres attendus `price_display`/`date_time`, rendu reel `/history` avec Date `JJ/MM/AA HH:mm`.
@@ -41,6 +46,8 @@ Travel Scrapping MVP construit localement :
 - CLI `sqlite-clean-invalid --dry-run|--execute` disponible pour nettoyer les anciennes observations corrompues de developpement local sans supprimer les campagnes.
 - CLI, README, `.env.example`, tests et coverage.
 - Couverture tests renforcée: 94 tests, coverage total 91%, aucun fichier Python sous 80%.
+- Écart Google Flight Deals vs local identifié et cadré: les paramètres locaux historiques différaient (`100 EUR`, `3-5 nuits`, endpoint `google_flights` avec destination imposée) alors que la demande utilisateur est `NCE`, `150 EUR`, `1-7 nuits`, `01/07/26-31/08/26`, destination libre, 1 correspondance maximum.
+- Correction attendue: provider SerpApi dédié `google_flights_deals`, endpoint distinct `google_flights_deals`, sans `return_date` quand `trip_length` est utilisé, probes ciblés `NCE-SVQ`, `NCE-STN`, `NCE-FCO`.
 
 ## Limite
 
@@ -48,5 +55,5 @@ Aucun sweep live large lancé. FlixBus live teste avec `RAPIDAPI_KEY`, mais Rapi
 
 ## Prochaine tranche
 
-Étape 01 - Verifier abonnement/quota FlixBus RapidAPI avant nouveau smoke live bus: dernier smoke HTTP `429 Too many requests`.
-Étape 02 - Ajuster budget ou cible SerpApi seulement apres decision utilisateur: dernier smoke `4` offres brutes, `3` rejetees par budget.
+Étape 01 - Si SVQ doit imperativement apparaitre dans la recherche globale, investiguer la decouverte "anywhere" SerpApi/Google Flight Deals: le probe cible trouve NCE-SVQ mais le global ne le renvoie pas dans le top brut.
+Étape 02 - Verifier abonnement/quota FlixBus RapidAPI avant nouveau smoke live bus: dernier smoke HTTP `429 Too many requests`.

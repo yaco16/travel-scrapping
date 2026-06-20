@@ -53,9 +53,13 @@ def valid_display_deal(deal: Deal, settings) -> bool:
         deal.nights = nights
     if not settings.min_nights <= nights <= settings.max_nights:
         return False
-    if return_date > settings.effective_search_end_date:
+    if outbound_date > settings.effective_search_end_date:
         return False
-    if deal.total_price_eur is None or deal.total_price_eur >= settings.max_roundtrip_price_eur:
+    if settings.search_start_date is not None and outbound_date < settings.search_start_date:
+        return False
+    if deal.total_price_eur is None or deal.total_price_eur > settings.max_roundtrip_price_eur:
+        return False
+    if deal.stops_count is not None and deal.stops_count > settings.max_stops:
         return False
     if not deal.actionable or not deal.booking_url or not deal.operator_name:
         return False
@@ -101,6 +105,34 @@ def diagnostics_context(settings, session, run: SearchRun | None = None) -> dict
         "rejected_total": rejected_total,
         "main_rejection_reason": main_reason,
         "no_offer_message": no_offer_message,
+        "google_flight_deals": google_flight_deals_context(latest_statuses),
+    }
+
+
+def google_flight_deals_context(statuses: dict[str, ProviderStatusRow]) -> dict[str, object]:
+    status = statuses.get("serpapi_google_flights_deals") or statuses.get("serpapi")
+    params = {}
+    examples: list[str] = []
+    if status:
+        try:
+            params = json.loads(status.request_params_json or "{}")
+        except json.JSONDecodeError:
+            params = {}
+        try:
+            examples = [str(item) for item in json.loads(status.destination_examples_json or "[]")]
+        except json.JSONDecodeError:
+            examples = []
+    endpoint = str(params.get("engine") or (status.name if status else "non disponible"))
+    return {
+        "endpoint": endpoint,
+        "raw_count": int(status.raw_count or 0) if status else 0,
+        "normalized_count": int(status.normalized_count or 0) if status else 0,
+        "accepted_count": int(status.accepted_count or 0) if status else 0,
+        "rejected_count": int(status.rejected_count or 0) if status else 0,
+        "main_rejection_reason": status.main_rejection_reason if status else None,
+        "params": params,
+        "destination_examples": examples,
+        "wrong_endpoint": endpoint != "google_flights_deals",
     }
 
 
@@ -174,6 +206,8 @@ def provider_diagnostics_payload(provider_statuses: dict[str, ProviderStatusRow]
             "accepted_count": status.accepted_count or 0,
             "rejected_count": status.rejected_count or 0,
             "main_rejection_reason": status.main_rejection_reason,
+            "request_params": json.loads(status.request_params_json or "{}"),
+            "destination_examples": json.loads(status.destination_examples_json or "[]"),
         }
         for name, status in provider_statuses.items()
     ]
@@ -200,7 +234,18 @@ def home(request: Request):
 @router.get("/search", response_class=HTMLResponse)
 def search_form(request: Request):
     settings = get_settings()
-    return templates.TemplateResponse(request, "search.html", {"settings": safe_settings_dict(settings)})
+    form_settings = settings.model_copy(
+        update={
+            "origin_airport": "NCE",
+            "search_start_date": date(2026, 7, 1),
+            "search_end_date": date(2026, 8, 31),
+            "min_nights": 1,
+            "max_nights": 7,
+            "max_roundtrip_price_eur": 150,
+            "max_stops": 1,
+        }
+    )
+    return templates.TemplateResponse(request, "search.html", {"settings": safe_settings_dict(form_settings)})
 
 
 def run_search_background(search_settings, *, run_id: int, modes: str, depart_from: date | None) -> None:
@@ -217,14 +262,21 @@ async def run_search_route(request: Request, background_tasks: BackgroundTasks):
     min_nights = int(str(form.get("min_nights") or settings.min_nights))
     max_nights = int(str(form.get("max_nights") or settings.max_nights))
     max_price = float(str(form.get("max_price") or settings.max_roundtrip_price_eur))
+    max_stops = int(str(form.get("max_stops") or settings.max_stops))
+    max_air_time = float(str(form.get("max_air_time") or settings.max_air_time_hours))
+    max_layover = float(str(form.get("max_layover") or settings.max_layover_hours))
     modes = ",".join(str(mode) for mode in form.getlist("modes")) or "all"
     search_settings = settings.model_copy(
         update={
             "origin_airport": origin.upper(),
+            "search_start_date": date.fromisoformat(depart_from_raw) if depart_from_raw else settings.search_start_date,
             "search_end_date": date.fromisoformat(depart_to_raw),
             "min_nights": min_nights,
             "max_nights": max_nights,
             "max_roundtrip_price_eur": max_price,
+            "max_stops": max_stops,
+            "max_air_time_hours": max_air_time,
+            "max_layover_hours": max_layover,
         }
     )
     depart_from = date.fromisoformat(depart_from_raw) if depart_from_raw else None

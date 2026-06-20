@@ -19,16 +19,20 @@ def validate_deal(deal: DealCandidate, settings: Settings, *, today: date | None
         reasons.append("invalid return date")
     if not settings.min_nights <= normalized_nights <= settings.max_nights:
         reasons.append("night range mismatch")
-    if deal.return_date > settings.effective_search_end_date:
-        reasons.append("return after search end date")
+    if deal.outbound_date > settings.effective_search_end_date:
+        reasons.append("departure after search end date")
+    if settings.search_start_date is not None and deal.outbound_date < settings.search_start_date:
+        reasons.append("departure before search start date")
     if deal.outbound_date < today:
         reasons.append("past outbound date")
     if deal.total_price <= 0:
         reasons.append("invalid price")
     if deal.currency != "EUR" and deal.total_price_eur is None:
         reasons.append("non-EUR price without conversion")
-    if (deal.total_price_eur or 0) >= settings.max_roundtrip_price_eur:
+    if (deal.total_price_eur or 0) > settings.max_roundtrip_price_eur:
         reasons.append("over budget")
+    if not is_bus and deal.stops_count is not None and deal.stops_count > settings.max_stops:
+        reasons.append("too many stops")
     if not is_bus and deal.max_layover_hours is not None and deal.max_layover_hours > settings.max_layover_hours:
         reasons.append("layover too long")
     if deal.has_overnight_airport and not settings.allow_overnight_airport:
