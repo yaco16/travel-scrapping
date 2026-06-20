@@ -197,7 +197,7 @@ def latest_display_deals(
         run = session.get(SearchRun, run_id)
     statuses = latest_provider_statuses(session, run.id if run else None)
     deals = [deal for deal in list(run.deals) if valid_display_deal(deal)] if run else []
-    if mode in {"flight", "bus"}:
+    if mode in {"flight", "bus", "train"}:
         deals = [deal for deal in deals if deal.transport_mode == mode]
     deals = sorted(
         deals,
@@ -328,6 +328,7 @@ def provider_role(name: str) -> str:
         "travelpayouts": "optional",
         "flixbus": "optional",
         "flixbus_rapidapi": "optional",
+        "distribusion": "optional",
         "playwright_probe": "detail_probe",
     }
     return roles.get(name, "optional")
@@ -379,6 +380,7 @@ def provider_diagnostics_payload(provider_statuses: dict[str, ProviderStatusRow]
             "accepted_count": status.accepted_count or 0,
             "rejected_count": status.rejected_count or 0,
             "main_rejection_reason": status.main_rejection_reason,
+            "warnings": json.loads(status.warnings_json or "[]"),
             "request_params": json.loads(status.request_params_json or "{}"),
             "destination_examples": json.loads(status.destination_examples_json or "[]"),
         }
@@ -447,7 +449,7 @@ async def run_search_route(request: Request, background_tasks: BackgroundTasks):
         }
     )
     depart_from = date.fromisoformat(depart_from_raw) if depart_from_raw else None
-    run_id = create_search_run(search_settings, status="pending")
+    run_id = create_search_run(search_settings, status="pending", modes=modes)
     background_tasks.add_task(run_search_background, search_settings, run_id=run_id, modes=modes, depart_from=depart_from)
     return RedirectResponse(f"/results?run_id={run_id}", status_code=303)
 

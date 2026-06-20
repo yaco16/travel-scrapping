@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     flixbus_rapidapi_host: str = ""
     flixbus_rapidapi_base_url: str = "https://flixbus2.p.rapidapi.com"
     flixbus_debug_save: bool = True
+    distribusion_enabled: bool = False
+    distribusion_api_key: str = ""
+    distribusion_base_url: str = ""
+    distribusion_partner_id: str = ""
     kiwi_tequila_api_key: str = ""
     brevo_api_key: str = ""
     email_enabled: bool = False
@@ -103,6 +107,8 @@ SECRET_FIELDS = {
     "rapidapi_key",
     "travelpayouts_token",
     "travelpayouts_marker",
+    "distribusion_api_key",
+    "distribusion_partner_id",
     "kiwi_tequila_api_key",
     "brevo_api_key",
 }

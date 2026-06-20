@@ -8,6 +8,7 @@
 | `serpapi_google_flights` / `serpapi` | `detail_probe` | Probe ciblé destination précise, pas provider principal pour `anywhere`. | Non, diagnostics avancés seulement. |
 | `travelpayouts` | `optional` | Prix indicatifs/cachés. Désactivé si `TRAVELPAYOUTS_MARKER` absent. | Non si marker absent ou aucune offre actionnable. |
 | `flixbus` / `flixbus_rapidapi` | `optional` | Bus via RapidAPI. Désactivé par défaut côté UX si `403/429` ou clé/quota inexploitable. | Non si rate-limit/abonnement bloque. |
+| `distribusion` | `optional` | Socle bus + train Europe. Désactivé sans credentials/API contractuelle. | Non tant que non configuré. |
 | `playwright_probe` | `detail_probe` | Squelette sûr de probe, sans contournement anti-bot. | Non si non configuré. |
 
 ## APIs externes étudiées
@@ -46,21 +47,23 @@ Utilité projet: intéressant si accès officiel obtenu; non prioritaire sans pa
 
 ## Bus et train Europe
 
-Aucune nouvelle API bus/train n'est intégrée maintenant.
+Le socle technique bus + train existe, mais aucun appel réel Distribusion n'est intégré maintenant.
 
 ### Distribusion
 
-Recommandation: meilleur candidat futur pour bus + train Europe.
+Recommandation: candidat prioritaire futur pour bus + train Europe.
 
 Intérêt: agrégateur transport terrestre, bus/train, nombreux transporteurs, surface API plus adaptée aux offres terrestres que les probes isolés.
 
-Limite: accès commercial/sandbox à obtenir avant toute intégration fiable.
+Limite: accès commercial/sandbox et documentation/API contractuelle à obtenir avant toute intégration fiable.
 
-Prochaine étape: demander un accès demo/sandbox, puis créer un provider futur possible `ground_transport_distribusion` désactivé par défaut tant que les credentials sont absents.
+État actuel: provider `distribusion` squelette, désactivé par défaut, visible en diagnostics si bus ou train est demandé, sans appel réseau et sans offres fictives.
+
+Prochaine étape: demander un accès demo/sandbox, puis implémenter l'appel réel Distribusion.
 
 ### Transitland/GTFS
 
-Utile pour découvrir opérateurs, arrêts, lignes et horaires. Pas adapté aux prix ni à la réservation.
+Utile pour découvrir opérateurs, routes, arrêts et horaires. Pas source de prix ni de réservation.
 
 ### OSDM
 

@@ -36,6 +36,7 @@ def test_key_ui_elements_exist_in_templates():
     assert "Meilleur prix" in offers
     assert "Providers désactivés" in results
     assert 'hx-target="#results-offers-panel"' in offers
+    assert "mode=train" in offers
     assert "step-spinner" not in results
     assert "pending-blink" in results
     assert "Dernier run" in home

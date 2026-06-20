@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 
 Confidence = Literal["high", "medium", "low"]
-TransportMode = Literal["flight", "bus"]
+TransportMode = Literal["flight", "bus", "train"]
 
 
 @dataclass(slots=True)

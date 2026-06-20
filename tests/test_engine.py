@@ -5,7 +5,14 @@ import pytest
 from travel_scrapping.config import Settings
 from travel_scrapping.db import PriceObservation, ProviderStatusRow, SearchRun, init_db, session_scope
 from travel_scrapping.schemas import DealCandidate, Destination, Offer
-from travel_scrapping.search.engine import create_search_run, latest_deals, load_destinations, run_search, run_search_sync
+from travel_scrapping.search.engine import (
+    create_search_run,
+    latest_deals,
+    load_destinations,
+    parse_modes,
+    run_search,
+    run_search_sync,
+)
 from travel_scrapping.search.providers.base import FlightProvider, ProviderStatus
 
 
@@ -78,6 +85,10 @@ class RejectedProvider(FlightProvider):
 def test_load_destinations():
     destinations = load_destinations()
     assert any(d.airport == "BCN" for d in destinations)
+
+
+def test_parse_modes_all_includes_flight_bus_train():
+    assert parse_modes("all") == {"flight", "bus", "train"}
 
 
 def test_create_search_run_and_latest_empty(tmp_path):
@@ -216,7 +227,10 @@ async def test_run_search_bus_records_last_error_and_rejected_offer(tmp_path, mo
     assert run is not None
     assert run.accepted_count == 0
     assert run.rejected_count == 1
-    assert len(statuses) == 1
+    assert [(row.name, row.enabled, row.attempted) for row in statuses[:1]] == [
+        ("distribusion", False, False)
+    ]
+    assert len(statuses) == 2
     assert statuses[-1].ok is False
     assert statuses[-1].error == "quota secret-token exceeded"
     assert statuses[-1].attempted is True
@@ -225,6 +239,34 @@ async def test_run_search_bus_records_last_error_and_rejected_offer(tmp_path, mo
     assert statuses[-1].normalized_count == 1
     assert statuses[-1].rejected_count == 1
     assert statuses[-1].main_rejection_reason == "invalid price (1)"
+
+
+@pytest.mark.asyncio
+async def test_run_search_train_records_disabled_distribusion_without_network(tmp_path, monkeypatch):
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path}/x.db",
+        date_to=date.today().replace(year=date.today().year + 1),
+    )
+    monkeypatch.setattr(
+        "travel_scrapping.search.engine.load_destinations",
+        lambda: [Destination("PAR", "Paris", "FR")],
+    )
+
+    run_id = await run_search(settings, providers=[], modes="train")
+
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        statuses = list(session.query(ProviderStatusRow).order_by(ProviderStatusRow.id))
+        run = session.get(SearchRun, run_id)
+
+    assert run is not None
+    assert run.status == "completed"
+    assert run.accepted_count == 0
+    assert [(row.name, row.enabled, row.key_present, row.attempted) for row in statuses] == [
+        ("distribusion", False, False, False)
+    ]
+    assert "DISTRIBUSION credentials missing" in statuses[0].warnings_json
 
 
 def test_run_search_sync_returns_run_id(tmp_path, monkeypatch):

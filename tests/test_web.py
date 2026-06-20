@@ -88,7 +88,7 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
     captured = {}
 
-    def fake_create_search_run(settings, *, status):
+    def fake_create_search_run(settings, *, status, modes):
         assert settings.origin_airport == "NCE"
         assert settings.search_start_date == date(2026, 7, 1)
         assert settings.search_end_date == date(2026, 8, 31)
@@ -97,6 +97,7 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
         assert settings.max_roundtrip_price_eur == 100
         assert settings.max_stops == 1
         assert status == "pending"
+        assert modes == "flight,bus"
         return 42
 
     def fake_run_search_background(settings, *, run_id, modes, depart_from):
@@ -277,6 +278,99 @@ def test_results_tabs_use_htmx_and_anchor_fallback(tmp_path, monkeypatch):
     assert 'hx-swap="outerHTML"' in response.text
     assert f'href="/results?run_id={run_id}&mode=flight#results-offers-panel"' in response.text
     assert f'hx-push-url="/results?run_id={run_id}&mode=flight"' in response.text
+    assert f'href="/results?run_id={run_id}&mode=train#results-offers-panel"' in response.text
+    assert f'hx-push-url="/results?run_id={run_id}&mode=train"' in response.text
+    assert ">Train</a>" in response.text
+
+
+def test_results_filter_by_train_mode(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=3, rejected_count=0, cheapest_price_eur=30)
+        session.add(run)
+        session.flush()
+        session.add_all(
+            [
+                Deal(
+                    run_id=run.id,
+                    source="serpapi_google_flights_deals",
+                    transport_mode="flight",
+                    provider="serpapi_google_flights_deals",
+                    origin_airport="NCE",
+                    destination_airport="BCN",
+                    destination_city="Barcelone",
+                    outbound_date=date(2026, 7, 2),
+                    return_date=date(2026, 7, 6),
+                    nights=4,
+                    total_price=40,
+                    currency="EUR",
+                    total_price_eur=40,
+                    airlines_json='["easyJet"]',
+                    operator_name="easyJet",
+                    booking_url="https://example.test/flight",
+                    actionable=True,
+                    confidence="high",
+                    fetched_at=now,
+                ),
+                Deal(
+                    run_id=run.id,
+                    source="flixbus_rapidapi",
+                    transport_mode="bus",
+                    provider="flixbus_rapidapi",
+                    origin_airport="NCE",
+                    destination_airport="VCE",
+                    destination_city="Venise",
+                    outbound_date=date(2026, 7, 3),
+                    return_date=date(2026, 7, 7),
+                    nights=4,
+                    total_price=35,
+                    currency="EUR",
+                    total_price_eur=35,
+                    airlines_json="[]",
+                    operator_name="FlixBus",
+                    booking_url="https://example.test/bus",
+                    actionable=True,
+                    confidence="high",
+                    fetched_at=now,
+                ),
+                Deal(
+                    run_id=run.id,
+                    source="distribusion",
+                    transport_mode="train",
+                    provider="distribusion",
+                    origin_airport="NCE",
+                    destination_airport="PAR",
+                    destination_city="Paris",
+                    outbound_date=date(2026, 7, 4),
+                    return_date=date(2026, 7, 8),
+                    nights=4,
+                    total_price=30,
+                    currency="EUR",
+                    total_price_eur=30,
+                    airlines_json="[]",
+                    operator_name="SNCF",
+                    booking_url="https://example.test/train",
+                    actionable=True,
+                    confidence="high",
+                    fetched_at=now,
+                ),
+            ]
+        )
+        run_id = run.id
+
+    client = TestClient(create_app())
+    response = client.get(f"/results?run_id={run_id}&mode=train")
+
+    assert response.status_code == 200
+    assert "Train" in response.text
+    assert "SNCF" in response.text
+    assert "easyJet" not in response.text
+    assert "FlixBus" not in response.text
+    assert "1 offres affichées sur 3 acceptées" in response.text
 
 
 def test_results_htmx_request_returns_offers_panel_only(tmp_path, monkeypatch):
@@ -612,6 +706,91 @@ def test_deals_api_returns_normalized_deals_and_provider_status(tmp_path, monkey
     assert "flixbus_rapidapi" in payload["provider_statuses"]
     assert payload["provider_diagnostics"][0]["provider"] == "flixbus_rapidapi"
     assert payload["no_offer_message"] == "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs."
+
+
+def test_deals_api_serializes_train_deal(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("MAX_ROUNDTRIP_PRICE_EUR", "2000")
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=89.9)
+        session.add(run)
+        session.flush()
+        session.add(
+            Deal(
+                run_id=run.id,
+                source="distribusion",
+                transport_mode="train",
+                provider="distribusion",
+                origin_airport="NCE",
+                destination_airport="PAR",
+                destination_city="Paris",
+                outbound_date=date(2026, 7, 30),
+                return_date=date(2026, 8, 2),
+                nights=3,
+                total_price=89.9,
+                currency="EUR",
+                total_price_eur=89.9,
+                airlines_json="[]",
+                operator_name="SNCF",
+                booking_url="https://example.test/train",
+                actionable=True,
+                confidence="high",
+                fetched_at=now,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/deals")
+
+    assert response.status_code == 200
+    deal = response.json()["deals"][0]
+    assert deal["transport_mode"] == "Train"
+    assert deal["dates"] == "30/07/26 - 02/08/26"
+    assert deal["price"] == "89,90 €"
+    assert deal["provider"] == "distribusion"
+    assert deal["operator"] == "SNCF"
+    assert deal["booking_url"] == "https://example.test/train"
+
+
+def test_results_distribusion_disabled_without_secret_leak(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("DISTRIBUSION_API_KEY", "placeholder-value")
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=0, rejected_count=0)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="distribusion",
+                enabled=False,
+                ok=True,
+                warnings_json='["DISTRIBUSION credentials missing"]',
+                key_present=True,
+                attempted=False,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+    payload = client.get("/deals").json()
+
+    assert response.status_code == 200
+    assert "distribusion" in response.text
+    assert "DISTRIBUSION credentials missing" in response.text
+    assert "placeholder-value" not in response.text
+    assert "placeholder-value" not in str(payload)
+    assert payload["provider_diagnostics"][0]["provider"] == "distribusion"
+    assert payload["provider_diagnostics"][0]["enabled"] is False
+    assert payload["provider_diagnostics"][0]["attempted"] is False
+    assert payload["provider_diagnostics"][0]["warnings"] == ["DISTRIBUSION credentials missing"]
 
 
 def test_results_show_flixbus_provider_error_without_secret(tmp_path, monkeypatch):

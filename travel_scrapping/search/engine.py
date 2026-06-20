@@ -18,6 +18,7 @@ from travel_scrapping.search.date_grid import generate_roundtrip_dates
 from travel_scrapping.search.filters import validate_deal
 from travel_scrapping.search.normalizer import scrub_text
 from travel_scrapping.search.providers.base import FlightProvider
+from travel_scrapping.search.providers.distribusion import DistribusionGroundTransportProvider
 from travel_scrapping.search.providers.playwright_probe import PlaywrightProbeProvider
 from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightDealsProvider
 from travel_scrapping.search.providers.travelpayouts import TravelpayoutsProvider
@@ -25,6 +26,7 @@ from travel_scrapping.search.scoring import sort_deals
 
 
 TERMINAL_RUN_STATUSES = {"completed", "failed"}
+ALL_TRANSPORT_MODES = {"flight", "bus", "train"}
 
 
 def load_destinations(path: str = "config/destinations.yaml") -> list[Destination]:
@@ -44,6 +46,13 @@ def build_providers(settings: Settings, *, include_indicative: bool = False) -> 
     providers.append(TravelpayoutsProvider(settings))
     providers.append(PlaywrightProbeProvider(settings))
     return providers
+
+
+def parse_modes(modes: str) -> set[str]:
+    if modes == "all":
+        return set(ALL_TRANSPORT_MODES)
+    parsed = {part.strip() for part in modes.split(",") if part.strip()}
+    return parsed & ALL_TRANSPORT_MODES
 
 
 def rejection_reasons(deal: DealCandidate, reasons: list[str]) -> list[str]:
@@ -122,7 +131,7 @@ async def run_search(
             min_nights=settings.min_nights,
             max_nights=settings.max_nights,
         )
-        mode_set = {"flight", "bus"} if modes == "all" else {part.strip() for part in modes.split(",")}
+        mode_set = parse_modes(modes)
         providers = providers or (
             build_providers(settings, include_indicative=include_indicative) if "flight" in mode_set else []
         )
@@ -177,6 +186,22 @@ async def run_search(
                 if row.normalized_count == 0:
                     row.normalized_count = len(candidates)
                 enrich_status(row, provider, accepted=provider_accepted, rejected=provider_rejected, reasons=provider_reasons)
+            if mode_set & {"bus", "train"}:
+                distribusion_provider = DistribusionGroundTransportProvider(settings)
+                status = distribusion_provider.status()
+                row = provider_status_row(run.id, status)
+                session.add(row)
+                provider_records.append(
+                    {"name": status.name, "enabled": status.enabled, "role": provider_role(status.name)}
+                )
+                if status.enabled:
+                    candidates = await distribusion_provider.search(
+                        destinations,
+                        date_pairs,
+                        limit=settings.top_results_limit,
+                    )
+                    row.raw_count = len(candidates)
+                    row.normalized_count = len(candidates)
             if "bus" in mode_set:
                 bus_provider = FlixBusRapidApiProvider(settings)
                 status = bus_provider.status()
@@ -271,6 +296,7 @@ def provider_role(name: str) -> str:
         "travelpayouts": "optional",
         "flixbus": "optional",
         "flixbus_rapidapi": "optional",
+        "distribusion": "optional",
         "playwright_probe": "detail_probe",
     }
     return roles.get(name, "optional")

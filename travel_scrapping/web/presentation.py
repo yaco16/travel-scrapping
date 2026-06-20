@@ -70,7 +70,8 @@ def booking_display(deal: Any) -> str:
 
 
 def mode_display(value: str | None) -> str:
-    return "Bus" if value == "bus" else "Avion"
+    labels = {"flight": "Avion", "bus": "Bus", "train": "Train"}
+    return labels.get(str(value or ""), "Avion")
 
 
 def duration_display(minutes: int | None) -> str:

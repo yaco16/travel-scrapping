@@ -4,14 +4,16 @@ from travel_scrapping.config import Settings, mask_secret, safe_settings_dict
 
 
 def test_config_defaults_and_masking():
-    settings = Settings(_env_file=None, serpapi_api_key="abcdef")
+    settings = Settings(_env_file=None, serpapi_api_key="abcdef", distribusion_api_key="placeholder-value")
     assert settings.origin_airport == "NCE"
     assert settings.search_end_date == date(2026, 8, 31)
     assert settings.effective_search_end_date == date(2026, 8, 31)
     assert settings.email_to == "kwad16@gmail.com"
     assert mask_secret("abcdef") == "ab****ef"
     assert safe_settings_dict(settings)["serpapi_api_key"] == "ab****ef"
+    assert safe_settings_dict(settings)["distribusion_api_key"] == "pl****ue"
     assert "abcdef" not in str(safe_settings_dict(settings))
+    assert "placeholder-value" not in str(safe_settings_dict(settings))
 
 
 def test_email_warning_when_sender_missing():

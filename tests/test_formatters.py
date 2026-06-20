@@ -1,4 +1,5 @@
 from travel_scrapping.formatters import format_date_fr, format_datetime_fr, format_duration, format_price_fr
+from travel_scrapping.web.presentation import mode_display
 
 
 def test_format_date_and_datetime_fr():
@@ -12,3 +13,9 @@ def test_format_price_and_duration_fr():
     assert format_duration(185) == "3h05"
     assert format_price_fr(None) == ""
     assert format_price_fr(None, diagnostic=True) == "Non disponible"
+
+
+def test_mode_display_train():
+    assert mode_display("flight") == "Avion"
+    assert mode_display("bus") == "Bus"
+    assert mode_display("train") == "Train"

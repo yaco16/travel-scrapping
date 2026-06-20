@@ -95,7 +95,7 @@
         <td>{{ status.enabled|yes_no }}</td>
         <td>{{ status.key_present|yes_no }}</td>
         <td>{{ status.attempted|yes_no }}</td>
-        <td>{% if status.http_status %}{{ status.http_status }}{% elif status.error %}{{ status.error }}{% else %}{{ status|provider_status_display }}{% endif %}</td>
+        <td>{% if status.http_status %}{{ status.http_status }}{% elif status.error %}{{ status.error }}{% elif status.warnings_json and status.warnings_json != "[]" %}{{ status.warnings_json|warnings_display|join(", ") }}{% else %}{{ status|provider_status_display }}{% endif %}</td>
         <td>{{ status.raw_count or 0 }}</td>
         <td>{{ status.normalized_count or 0 }}</td>
         <td>{{ status.accepted_count or 0 }}</td>
