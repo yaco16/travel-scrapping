@@ -7,7 +7,7 @@ Archive: MVP front exploitable malgre blocage RapidAPI externe.
 ## Commits
 
 - Depart: `1e4534d9aed0aad27d2dd8ce6b81634d62389d69`
-- Final: renseigne dans rapport final apres push.
+- Final implementation: `653f41f6ca283c0584d5ab7647fec39aa3514ca6`
 
 ## Resultats
 
