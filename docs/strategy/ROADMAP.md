@@ -28,6 +28,7 @@ Travel Scrapping MVP construit localement :
 - Insertion SQLite des observations prix protegee: `run_id` obligatoire, champs normalises indispensables non nuls, diagnostics/variations ignorent les lignes historiques invalides.
 - CLI `sqlite-clean-invalid --dry-run|--execute` disponible pour nettoyer les anciennes observations corrompues de developpement local sans supprimer les campagnes.
 - CLI, README, `.env.example`, tests et coverage.
+- Couverture tests renforcée: 94 tests, coverage total 91%, aucun fichier Python sous 80%.
 
 ## Limite
 

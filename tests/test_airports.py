@@ -4,7 +4,7 @@ import httpx
 from sqlalchemy import select
 
 from travel_scrapping.airports import resolve_airport
-from travel_scrapping.airports.ourairports import import_csv
+from travel_scrapping.airports.ourairports import ensure_airports_csv, import_csv, lookup_airport
 from travel_scrapping.config import Settings
 from travel_scrapping.db import AirportMetadata, init_db, session_scope
 from travel_scrapping.providers.api_ninjas_airports import fetch_airport_by_iata
@@ -19,6 +19,10 @@ class FakeResponse:
         if isinstance(self._payload, Exception):
             raise self._payload
         return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError("bad status", request=None, response=None)
 
 
 def test_fetch_airport_by_iata_filters_exact_match(monkeypatch):
@@ -70,6 +74,56 @@ def test_fetch_airport_by_iata_timeout_returns_none(monkeypatch):
     settings = Settings(_env_file=None, api_ninjas_api_key="secret")
 
     assert fetch_airport_by_iata("VCE", settings=settings) is None
+
+
+def test_fetch_airport_by_iata_rejects_bad_responses(monkeypatch):
+    settings = Settings(_env_file=None, api_ninjas_api_key="secret")
+    responses = [
+        FakeResponse(500, []),
+        FakeResponse(200, ValueError("bad json")),
+        FakeResponse(200, {"iata": "VCE"}),
+        FakeResponse(200, [{"iata": "XXX", "name": "Wrong"}]),
+    ]
+
+    def fake_get(url, params, headers, timeout):
+        return responses.pop(0)
+
+    monkeypatch.setattr("travel_scrapping.providers.api_ninjas_airports.httpx.get", fake_get)
+
+    assert fetch_airport_by_iata("VCE", settings=settings) is None
+    assert fetch_airport_by_iata("VCE", settings=settings) is None
+    assert fetch_airport_by_iata("VCE", settings=settings) is None
+    assert fetch_airport_by_iata("VCE", settings=settings) is None
+
+
+def test_ensure_airports_csv_uses_cache_and_force_refresh(tmp_path, monkeypatch):
+    path = tmp_path / "airports.csv"
+    path.write_text("cached", encoding="utf-8")
+    calls = 0
+
+    def fake_get(url, timeout):
+        nonlocal calls
+        calls += 1
+        return FakeResponse(200, [])
+
+    monkeypatch.setattr("travel_scrapping.airports.ourairports.httpx.get", fake_get)
+
+    assert ensure_airports_csv(path) == path
+    assert path.read_text(encoding="utf-8") == "cached"
+    assert calls == 0
+
+    response = FakeResponse(200, [])
+    response.content = b"fresh"
+
+    def fake_refresh(url, timeout):
+        nonlocal calls
+        calls += 1
+        return response
+
+    monkeypatch.setattr("travel_scrapping.airports.ourairports.httpx.get", fake_refresh)
+    assert ensure_airports_csv(path, force_refresh=True) == path
+    assert path.read_text(encoding="utf-8") == "fresh"
+    assert calls == 1
 
 
 def test_resolver_french_display_names_without_api_key(tmp_path):
@@ -141,6 +195,36 @@ def test_ourairports_import_and_resolve(tmp_path):
 
     assert result.info.source == "ourairports"
     assert result.info.display_name == "Venise"
+
+
+def test_ourairports_import_updates_existing_and_lookup_handles_invalid(tmp_path):
+    csv_path = tmp_path / "airports.csv"
+    csv_path.write_text(
+        "ident,type,name,latitude_deg,longitude_deg,elevation_ft,iso_country,iso_region,municipality,scheduled_service,iata_code\n"
+        "OLD,small_airport,Old Name,bad,bad,bad,IT,IT-34,Old City,no,VCE\n",
+        encoding="utf-8",
+    )
+    settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path}/x.db")
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        assert lookup_airport(session, "") is None
+        assert lookup_airport(session, "VCE") is None
+        assert import_csv(session, csv_path) == 1
+        first = lookup_airport(session, "VCE")
+        assert first is not None
+        assert first.latitude is None
+        assert first.raw_payload["elevation_ft"] is None
+        csv_path.write_text(
+            "ident,type,name,latitude_deg,longitude_deg,elevation_ft,iso_country,iso_region,municipality,scheduled_service,iata_code\n"
+            "NEW,large_airport,New Name,45.5,12.3,7,IT,IT-34,Venice,yes,VCE\n",
+            encoding="utf-8",
+        )
+        assert import_csv(session, csv_path) == 1
+        updated = lookup_airport(session, "VCE")
+
+    assert updated is not None
+    assert updated.airport_name == "New Name"
+    assert updated.latitude == 45.5
 
 
 def test_api_ninjas_not_called_when_ourairports_has_code(tmp_path, monkeypatch):
