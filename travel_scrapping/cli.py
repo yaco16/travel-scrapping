@@ -19,6 +19,7 @@ from travel_scrapping.config import get_settings, safe_settings_dict
 from travel_scrapping.db import (
     AirportMetadata,
     PriceObservation,
+    ProviderStatusRow,
     SearchRun,
     init_db,
     invalid_price_observation_clause,
@@ -27,6 +28,7 @@ from travel_scrapping.db import (
 )
 from travel_scrapping.email.brevo import send_deals_email
 from travel_scrapping.search.engine import latest_deals, run_search
+from travel_scrapping.search.normalizer import scrub_text
 from travel_scrapping.search.providers.serpapi_google_flights import serpapi_smoke
 
 app = typer.Typer()
@@ -146,6 +148,14 @@ def sqlite_diagnostics() -> None:
                 f"nights={row.nights} source={row.source} count={row.count} "
                 f"min={row.min_price} max={row.max_price}"
             )
+        typer.echo("latest_provider_statuses:")
+        statuses = session.scalars(select(ProviderStatusRow).order_by(ProviderStatusRow.id.desc()).limit(10))
+        for row in statuses:
+            warnings = ", ".join(json.loads(row.warnings_json or "[]"))
+            typer.echo(
+                f"{row.id} run={row.run_id} provider={row.name} enabled={row.enabled} ok={row.ok} "
+                f"error={scrub_text(row.error or '')} warnings={warnings}"
+            )
 
 
 @app.command("sqlite-clean-invalid")
@@ -259,6 +269,10 @@ def bus_stations_search(query: str = typer.Option(..., "--query")) -> None:
         typer.echo("; ".join(status.warnings))
         return
     stations = asyncio.run(provider.station_search(query))
+    typer.echo(f"statut_http={provider.last_status_code or 'non disponible'}")
+    typer.echo(f"endpoint={provider.last_path or 'non disponible'}")
+    if provider.last_error:
+        typer.echo(f"error={scrub_text(provider.last_error)}")
     for station in stations[:20]:
         typer.echo(f"{station['id']} | {station['name']} | {station.get('city') or ''}")
 
@@ -281,9 +295,19 @@ def flixbus_smoke(
     destination_stations = asyncio.run(provider.station_search(destination))
     typer.echo(f"stations_origin={len(origin_stations)}")
     typer.echo(f"stations_destination={len(destination_stations)}")
+    if provider.last_status_code is not None:
+        typer.echo(f"stations_statut_http={provider.last_status_code}")
+        typer.echo(f"stations_endpoint={provider.last_path or 'non disponible'}")
+    if provider.last_error:
+        typer.echo(f"stations_error={scrub_text(provider.last_error)}")
     origin_id = origin_stations[0]["id"] if origin_stations else origin
     destination_id = destination_stations[0]["id"] if destination_stations else destination
     offers = asyncio.run(provider.search_roundtrip(origin_id, destination_id, depart, return_))
+    if provider.last_status_code is not None:
+        typer.echo(f"search_statut_http={provider.last_status_code}")
+        typer.echo(f"search_endpoint={provider.last_path or 'non disponible'}")
+    if provider.last_error:
+        typer.echo(f"search_error={scrub_text(provider.last_error)}")
     typer.echo(f"offres={len(offers)}")
     for offer in offers[:10]:
         typer.echo(

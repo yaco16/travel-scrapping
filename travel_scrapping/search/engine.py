@@ -14,6 +14,7 @@ from travel_scrapping.db import ProviderStatusRow, SearchRun, init_db, save_deal
 from travel_scrapping.schemas import DealCandidate, Destination
 from travel_scrapping.search.date_grid import generate_roundtrip_dates
 from travel_scrapping.search.filters import validate_deal
+from travel_scrapping.search.normalizer import scrub_text
 from travel_scrapping.search.providers.base import FlightProvider
 from travel_scrapping.search.providers.playwright_probe import PlaywrightProbeProvider
 from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightsProvider
@@ -90,7 +91,7 @@ async def run_search(
                         enabled=True,
                         ok=False,
                         warnings_json="[]",
-                        error=str(exc)[:500],
+                        error=scrub_text(str(exc))[:500],
                     )
                 )
                 continue
@@ -127,7 +128,7 @@ async def run_search(
                                 enabled=True,
                                 ok=False,
                                 warnings_json="[]",
-                                error=str(exc)[:500],
+                                error=scrub_text(str(exc))[:500],
                             )
                         )
                         continue
@@ -138,6 +139,17 @@ async def run_search(
                             all_deals.append(deal)
                         else:
                             rejected += 1
+                if bus_provider.last_error:
+                    session.add(
+                        ProviderStatusRow(
+                            run_id=run.id,
+                            name=bus_provider.name,
+                            enabled=True,
+                            ok=False,
+                            warnings_json="[]",
+                            error=scrub_text(bus_provider.last_error),
+                        )
+                    )
         sorted_deals = sort_deals(all_deals)[: settings.top_results_limit]
         inserted = save_deals(session, run, sorted_deals)
         run.status = "completed"

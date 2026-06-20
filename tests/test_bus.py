@@ -54,10 +54,14 @@ def test_flixbus_offer_without_price_or_link_rejected():
 
 
 def test_flixbus_provider_status_and_mocked_search(monkeypatch):
-    provider = FlixBusRapidApiProvider(Settings(_env_file=None, rapidapi_key="secret", flixbus_rapidapi_host="host"))
+    provider = FlixBusRapidApiProvider(
+        Settings(_env_file=None, rapidapi_key="secret", flixbus_rapidapi_host="host", flixbus_debug_save=False)
+    )
     assert provider.status().enabled
     assert provider.headers()["X-RapidAPI-Key"] == "secret"
     assert provider.headers()["X-RapidAPI-Host"] == "host"
+    default_host_provider = FlixBusRapidApiProvider(Settings(_env_file=None, rapidapi_key="secret"))
+    assert default_host_provider.headers()["X-RapidAPI-Host"] == "flixbus2.p.rapidapi.com"
 
     async def fake_get_first_ok(paths, params):
         if "query" in params:

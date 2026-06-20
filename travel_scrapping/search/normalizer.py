@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 from typing import Any
 
 from travel_scrapping.schemas import DealCandidate
@@ -24,6 +25,16 @@ def scrub_payload(payload: dict[str, Any]) -> dict[str, Any]:
             scrubbed[key] = [scrub_payload(v) if isinstance(v, dict) else v for v in value[:20]]
         else:
             scrubbed[key] = value
+    return scrubbed
+
+
+def scrub_text(value: str) -> str:
+    patterns = (
+        (r"([?&](?:api_key|key|token|secret)=)[^&\s]+", r"\1***"),
+    )
+    scrubbed = value
+    for pattern, replacement in patterns:
+        scrubbed = re.sub(pattern, replacement, scrubbed, flags=re.IGNORECASE)
     return scrubbed
 
 

@@ -18,14 +18,15 @@ Travel Scrapping MVP construit localement :
 - Enrichissement aeroport via cache SQLite, OurAirports local, API Ninjas fallback, fallback villes francaises sans cle API.
 - CLI `airports-import-ourairports`, `airports-refresh`, `airports-diagnostics`.
 - CLI `serpapi-smoke`, `flixbus-smoke`, `bus-stations-search`.
+- Smoke FlixBus live instrumente: host RapidAPI derive par defaut, statuts HTTP/endpoint/erreurs visibles en CLI et diagnostics SQLite, erreurs scrubbees.
 - Insertion SQLite des observations prix protegee: `run_id` obligatoire, champs normalises indispensables non nuls, diagnostics/variations ignorent les lignes historiques invalides.
 - CLI `sqlite-clean-invalid --dry-run|--execute` disponible pour nettoyer les anciennes observations corrompues de developpement local sans supprimer les campagnes.
 - CLI, README, `.env.example`, tests et coverage.
 
 ## Limite
 
-Aucun sweep live large lancé. FlixBus live non teste sans `RAPIDAPI_KEY`. Playwright reste squelette sûr désactivé par défaut.
+Aucun sweep live large lancé. FlixBus live teste avec `RAPIDAPI_KEY`, mais RapidAPI retourne `403/429` (`You are not subscribed to this API` / `Too many requests`) et aucune offre actionnable n'est récupérée. Playwright reste squelette sûr désactivé par défaut.
 
 ## Prochaine tranche
 
-Configurer `RAPIDAPI_KEY`/host FlixBus2, lancer `bus-stations-search` puis `flixbus-smoke`, et ajuster les endpoints si la documentation RapidAPI differe.
+Verifier abonnement/quota RapidAPI Flixbus2, puis relancer `bus-stations-search`, `flixbus-smoke` et un E2E bus limite jusqu'a obtenir des offres actionnables stockees en SQLite.

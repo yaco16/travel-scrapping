@@ -1,4 +1,4 @@
-from travel_scrapping.search.normalizer import normalize_serpapi_item, scrub_payload
+from travel_scrapping.search.normalizer import normalize_serpapi_item, scrub_payload, scrub_text
 
 
 def test_serpapi_normalization():
@@ -22,3 +22,9 @@ def test_serpapi_normalization():
 
 def test_scrub_payload_masks_secretish_keys():
     assert scrub_payload({"api_key": "secret"})["api_key"] == "***"
+
+
+def test_scrub_text_masks_query_secrets():
+    text = "https://example.test/search?api_key=secret123&token=tok456&ok=1"
+
+    assert scrub_text(text) == "https://example.test/search?api_key=***&token=***&ok=1"
