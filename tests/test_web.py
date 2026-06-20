@@ -40,17 +40,24 @@ def test_main_menu_hides_sqlite(tmp_path, monkeypatch):
 def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    captured = {}
 
-    async def fake_run_search(settings, *, modes, depart_from):
+    def fake_create_search_run(settings, *, status):
         assert settings.origin_airport == "NCE"
         assert settings.min_nights == 3
         assert settings.max_nights == 5
         assert settings.max_roundtrip_price_eur == 100
-        assert modes == "flight,bus"
-        assert depart_from == date(2026, 7, 1)
+        assert status == "pending"
         return 42
 
-    monkeypatch.setattr(web_routes, "run_search", fake_run_search)
+    def fake_run_search_background(settings, *, run_id, modes, depart_from):
+        captured["origin"] = settings.origin_airport
+        captured["run_id"] = run_id
+        captured["modes"] = modes
+        captured["depart_from"] = depart_from
+
+    monkeypatch.setattr(web_routes, "create_search_run", fake_create_search_run)
+    monkeypatch.setattr(web_routes, "run_search_background", fake_run_search_background)
     client = TestClient(create_app())
     response = client.post(
         "/run",
@@ -68,6 +75,24 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
 
     assert response.status_code == 303
     assert response.headers["location"] == "/results?run_id=42"
+    assert captured == {
+        "origin": "NCE",
+        "run_id": 42,
+        "modes": "flight,bus",
+        "depart_from": date(2026, 7, 1),
+    }
+
+
+def test_search_form_prevents_double_submit(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    client = TestClient(create_app())
+    response = client.get("/search")
+
+    assert response.status_code == 200
+    assert "data-run-form" in response.text
+    assert "data-run-submit" in response.text
+    assert "button.disabled = true" in response.text
 
 
 def test_sqlite_diagnostic_handles_null_dates(tmp_path, monkeypatch):
@@ -156,6 +181,26 @@ def test_results_filter_by_run_id(tmp_path, monkeypatch):
     assert "Venise" in response.text
     assert "Barcelone" not in response.text
     assert "45,00 €" in response.text
+
+
+def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="pending")
+        session.add(run)
+        session.flush()
+        run_id = run.id
+
+    client = TestClient(create_app())
+    response = client.get(f"/results?run_id={run_id}")
+
+    assert response.status_code == 200
+    assert f"Run #{run_id}" in response.text
+    assert "<strong>pending</strong>" in response.text
+    assert '<meta http-equiv="refresh" content="5">' in response.text
 
 
 def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):

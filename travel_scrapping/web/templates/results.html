@@ -1,6 +1,22 @@
 {% extends "base.html" %}
+{% block head %}
+{% if run and not run_terminal %}
+<meta http-equiv="refresh" content="5">
+{% endif %}
+{% endblock %}
 {% block content %}
 <h1>Résultats</h1>
+{% if run %}
+<section>
+  <h2>Run #{{ run.id }}</h2>
+  <p>Statut : <strong>{{ run.status }}</strong></p>
+  {% if run.warnings_json and run.warnings_json != "[]" %}
+  {% for warning in run.warnings_json|warnings_display %}
+  <p>Erreur : {{ warning }}</p>
+  {% endfor %}
+  {% endif %}
+</section>
+{% endif %}
 {% if email_enabled %}
 <form action="/email" method="post"><button type="submit">Envoyer email</button></form>
 {% endif %}

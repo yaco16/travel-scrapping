@@ -1,4 +1,4 @@
 # TODO
 
-- Utiliser `/search` puis `/results?run_id=...` pour verifier un run front bout en bout.
+- Utiliser le parcours front non bloquant `/search` puis `/results?run_id=...` sur donnees reelles.
 - Verifier abonnement/quota RapidAPI Flixbus2 avant nouveau smoke live: l'API retourne `403/429` malgre `RAPIDAPI_KEY`.

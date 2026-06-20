@@ -5,7 +5,7 @@ import json
 from datetime import date
 from typing import cast
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -23,7 +23,7 @@ from travel_scrapping.db import (
     valid_price_observation_clause,
 )
 from travel_scrapping.email.brevo import send_deals_email
-from travel_scrapping.search.engine import run_search
+from travel_scrapping.search.engine import create_search_run, run_search_sync
 from travel_scrapping.airports import resolve_airport
 from travel_scrapping.web import presentation
 
@@ -38,6 +38,7 @@ templates.env.filters["mode_display"] = presentation.mode_display
 templates.env.filters["duration_display"] = presentation.duration_display
 templates.env.filters["provider_status_display"] = presentation.provider_status_display
 router = APIRouter()
+TERMINAL_RUN_STATUSES = {"completed", "failed"}
 
 
 def valid_display_deal(deal: Deal, settings) -> bool:
@@ -155,8 +156,12 @@ def search_form(request: Request):
     return templates.TemplateResponse(request, "search.html", {"settings": safe_settings_dict(settings)})
 
 
+def run_search_background(search_settings, *, run_id: int, modes: str, depart_from: date | None) -> None:
+    run_search_sync(search_settings, modes=modes, depart_from=depart_from, run_id=run_id)
+
+
 @router.post("/run")
-async def run_search_route(request: Request):
+async def run_search_route(request: Request, background_tasks: BackgroundTasks):
     settings = get_settings()
     form = await request.form()
     origin = str(form.get("origin_airport") or form.get("depart_from") or form.get("origin") or settings.origin_airport)
@@ -176,7 +181,8 @@ async def run_search_route(request: Request):
         }
     )
     depart_from = date.fromisoformat(depart_from_raw) if depart_from_raw else None
-    run_id = await run_search(search_settings, modes=modes, depart_from=depart_from)
+    run_id = create_search_run(search_settings, status="pending")
+    background_tasks.add_task(run_search_background, search_settings, run_id=run_id, modes=modes, depart_from=depart_from)
     return RedirectResponse(f"/results?run_id={run_id}", status_code=303)
 
 
@@ -193,6 +199,7 @@ def results(request: Request):
             "results.html",
             {
                 "run": run,
+                "run_terminal": bool(run and run.status in TERMINAL_RUN_STATUSES),
                 "deals": deals,
                 "provider_statuses": provider_statuses,
                 "email_enabled": settings.email_enabled,

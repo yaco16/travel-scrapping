@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Paramètres</h1>
-<form action="/run" method="post" class="grid">
+<form action="/run" method="post" class="grid" data-run-form>
   <label>Origine <input name="origin_airport" value="{{ settings.origin_airport }}"></label>
   <label>Date départ min <input name="depart_date_min" type="date"></label>
   <label>Date départ max <input name="depart_date_max" type="date" value="{{ settings.search_end_date }}"></label>
@@ -13,6 +13,16 @@
   <label>Air max h <input name="max_air_time" value="{{ settings.max_air_time_hours }}"></label>
   <label>Escales max h <input name="max_layover" value="{{ settings.max_layover_hours }}"></label>
   <label>Email <input name="email_to" value="{{ settings.email_to }}"></label>
-  <button type="submit">Sauver et lancer</button>
+  <button type="submit" data-run-submit>Sauver et lancer</button>
 </form>
+<script>
+  const form = document.querySelector("[data-run-form]");
+  form?.addEventListener("submit", () => {
+    const button = form.querySelector("[data-run-submit]");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Lancement...";
+    }
+  });
+</script>
 {% endblock %}
