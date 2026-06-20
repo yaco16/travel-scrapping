@@ -71,3 +71,16 @@ def mode_display(value: str | None) -> str:
 
 def duration_display(minutes: int | None) -> str:
     return format_duration(minutes)
+
+
+def provider_status_display(status: Any | None) -> str:
+    if not status:
+        return "Non disponible"
+    if not getattr(status, "enabled", False):
+        return "Désactivé"
+    if getattr(status, "ok", False):
+        return "OK"
+    error = getattr(status, "error", None)
+    if error:
+        return str(error)
+    return "Erreur"

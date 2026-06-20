@@ -19,6 +19,9 @@ Travel Scrapping MVP construit localement :
 - CLI `airports-import-ourairports`, `airports-refresh`, `airports-diagnostics`.
 - CLI `serpapi-smoke`, `flixbus-smoke`, `bus-stations-search`.
 - Smoke FlixBus live instrumente: host RapidAPI derive par defaut, statuts HTTP/endpoint/erreurs visibles en CLI et diagnostics SQLite, erreurs scrubbees.
+- Endpoint `GET /deals` expose les meilleures offres SQLite normalisees du dernier run.
+- Front `/results` affiche offres actionnables avec destination, dates JJ/MM/AA, prix francais, nuits, provider et statut provider.
+- Erreurs FlixBus RapidAPI `403/429` affichees proprement sans secret et sans echec page.
 - Insertion SQLite des observations prix protegee: `run_id` obligatoire, champs normalises indispensables non nuls, diagnostics/variations ignorent les lignes historiques invalides.
 - CLI `sqlite-clean-invalid --dry-run|--execute` disponible pour nettoyer les anciennes observations corrompues de developpement local sans supprimer les campagnes.
 - CLI, README, `.env.example`, tests et coverage.
@@ -29,4 +32,4 @@ Aucun sweep live large lancé. FlixBus live teste avec `RAPIDAPI_KEY`, mais Rapi
 
 ## Prochaine tranche
 
-Verifier abonnement/quota RapidAPI Flixbus2, puis relancer `bus-stations-search`, `flixbus-smoke` et un E2E bus limite jusqu'a obtenir des offres actionnables stockees en SQLite.
+Exploiter le MVP front avec donnees SQLite existantes, puis verifier abonnement/quota RapidAPI Flixbus2 avant tout nouveau smoke live bus.

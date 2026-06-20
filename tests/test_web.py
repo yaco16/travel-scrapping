@@ -3,7 +3,7 @@ from datetime import date, datetime
 from fastapi.testclient import TestClient
 
 from travel_scrapping.config import get_settings
-from travel_scrapping.db import Deal, PriceObservation, SearchRun, init_db, session_scope
+from travel_scrapping.db import Deal, PriceObservation, ProviderStatusRow, SearchRun, init_db, session_scope
 from travel_scrapping.main import create_app
 
 
@@ -235,3 +235,90 @@ def test_results_do_not_render_raw_warnings_json(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert '["raw warning"]' not in response.text
     assert "raw warning" not in response.text
+
+
+def test_deals_api_returns_normalized_deals_and_provider_status(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("MAX_ROUNDTRIP_PRICE_EUR", "2000")
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=1234.5)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="flixbus_rapidapi",
+                enabled=True,
+                ok=False,
+                warnings_json="[]",
+                error="Too many requests",
+            )
+        )
+        session.add(
+            Deal(
+                run_id=run.id,
+                source="flixbus_rapidapi",
+                transport_mode="bus",
+                provider="flixbus_rapidapi",
+                origin_airport="NCE",
+                destination_airport="VCE",
+                outbound_date=date(2026, 7, 30),
+                return_date=date(2026, 8, 2),
+                nights=3,
+                total_price=1234.5,
+                currency="EUR",
+                total_price_eur=1234.5,
+                airlines_json="[]",
+                operator_name="FlixBus",
+                booking_url="https://example.test/flixbus",
+                actionable=True,
+                confidence="high",
+                fetched_at=now,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/deals")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_id"] == 1
+    assert payload["deals"][0]["destination"] == "Venise"
+    assert payload["deals"][0]["dates"] == "30/07/26 - 02/08/26"
+    assert payload["deals"][0]["nights"] == 3
+    assert payload["deals"][0]["price"] == "1 234,50 €"
+    assert payload["deals"][0]["provider"] == "flixbus_rapidapi"
+    assert payload["deals"][0]["provider_status"] == "Too many requests"
+    assert "flixbus_rapidapi" in payload["provider_statuses"]
+
+
+def test_results_show_flixbus_provider_error_without_secret(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=0, rejected_count=1)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="flixbus_rapidapi",
+                enabled=True,
+                ok=False,
+                warnings_json="[]",
+                error="You are not subscribed to this API.",
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert "You are not subscribed to this API." in response.text
+    assert "RAPIDAPI_KEY" not in response.text

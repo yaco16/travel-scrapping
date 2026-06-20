@@ -10,3 +10,4 @@ input { padding: .45rem; border: 1px solid #aaa; border-radius: 4px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .8rem; }
 .warning { border-left: 4px solid #b45309; background: #fff7ed; padding: .6rem; }
 .table-wrapper { overflow-x: auto; width: 100%; }
+.status-list { padding-left: 1.2rem; }

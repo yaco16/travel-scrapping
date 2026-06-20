@@ -6,7 +6,7 @@ from datetime import date
 from typing import cast
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
@@ -15,6 +15,7 @@ from travel_scrapping.db import (
     OurAirport,
     Deal,
     PriceObservation,
+    ProviderStatusRow,
     SearchRun,
     init_db,
     invalid_price_observation_clause,
@@ -35,6 +36,7 @@ templates.env.filters["warnings_display"] = presentation.warnings_display
 templates.env.filters["booking_display"] = presentation.booking_display
 templates.env.filters["mode_display"] = presentation.mode_display
 templates.env.filters["duration_display"] = presentation.duration_display
+templates.env.filters["provider_status_display"] = presentation.provider_status_display
 router = APIRouter()
 
 
@@ -57,7 +59,11 @@ def valid_display_deal(deal: Deal, settings) -> bool:
     return True
 
 
-def diagnostics_context(settings, session) -> dict[str, object]:
+def diagnostics_context(settings, session, run: SearchRun | None = None) -> dict[str, object]:
+    if run is None:
+        run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
+    latest_statuses = latest_provider_statuses(session, run.id if run else None)
+    flixbus_status = latest_statuses.get("flixbus_rapidapi")
     return {
         "serpapi_key_present": bool(settings.serpapi_api_key),
         "serpapi_last_status": "non disponible",
@@ -69,8 +75,57 @@ def diagnostics_context(settings, session) -> dict[str, object]:
         "api_ninjas_active": settings.api_ninjas_enabled,
         "flixbus_active": settings.bus_enabled and settings.flixbus_enabled,
         "rapidapi_key_present": bool(settings.rapidapi_key),
-        "flixbus_last_status": "non disponible",
+        "flixbus_last_status": presentation.provider_status_display(flixbus_status),
         "flixbus_last_json": "data/debug/",
+    }
+
+
+def latest_provider_statuses(session, run_id: int | None) -> dict[str, ProviderStatusRow]:
+    if run_id is None:
+        return {}
+    rows = list(
+        session.scalars(
+            select(ProviderStatusRow)
+            .where(ProviderStatusRow.run_id == run_id)
+            .order_by(ProviderStatusRow.id.asc())
+        )
+    )
+    statuses: dict[str, ProviderStatusRow] = {}
+    for row in rows:
+        statuses[row.name] = row
+    return statuses
+
+
+def latest_display_deals(settings, session) -> tuple[SearchRun | None, list[Deal], dict[str, ProviderStatusRow]]:
+    run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
+    statuses = latest_provider_statuses(session, run.id if run else None)
+    deals = [deal for deal in list(run.deals) if valid_display_deal(deal, settings)] if run else []
+    deals = sorted(deals, key=lambda deal: deal.total_price_eur)[: settings.top_results_limit]
+    for deal in deals:
+        deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
+            deal.destination_airport, settings, session
+        ).info.display_name
+        deal.provider_status = statuses.get(deal.provider or deal.source) or statuses.get(deal.source)  # type: ignore[attr-defined]
+    return run, deals, statuses
+
+
+def deal_payload(deal: Deal) -> dict[str, object]:
+    status = getattr(deal, "provider_status", None)
+    outbound_date = cast(date, deal.outbound_date)
+    return_date = cast(date, deal.return_date)
+    return {
+        "id": deal.id,
+        "destination": presentation.destination_display(deal),
+        "outbound_date": presentation.short_date(outbound_date),
+        "return_date": presentation.short_date(return_date),
+        "dates": f"{presentation.short_date(outbound_date)} - {presentation.short_date(return_date)}",
+        "nights": deal.nights,
+        "price": presentation.price_display(deal.total_price_eur),
+        "provider": deal.provider or deal.source,
+        "provider_status": presentation.provider_status_display(status),
+        "transport_mode": presentation.mode_display(deal.transport_mode),
+        "operator": deal.operator_name or presentation.airlines_display(deal.airlines_json),
+        "booking_url": deal.booking_url,
     }
 
 
@@ -105,21 +160,35 @@ def results(request: Request):
     settings = get_settings()
     factory = init_db(settings)
     with session_scope(factory) as session:
-        run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
-        deals = [deal for deal in list(run.deals) if valid_display_deal(deal, settings)] if run else []
-        for deal in deals:
-            deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
-                deal.destination_airport, settings, session
-            ).info.display_name
+        run, deals, provider_statuses = latest_display_deals(settings, session)
         return templates.TemplateResponse(
             request,
             "results.html",
             {
                 "run": run,
                 "deals": deals,
+                "provider_statuses": provider_statuses,
                 "email_enabled": settings.email_enabled,
-                "diagnostics": diagnostics_context(settings, session),
+                "diagnostics": diagnostics_context(settings, session, run),
             },
+        )
+
+
+@router.get("/deals")
+def deals_api():
+    settings = get_settings()
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        run, deals, provider_statuses = latest_display_deals(settings, session)
+        return JSONResponse(
+            {
+                "run_id": run.id if run else None,
+                "deals": [deal_payload(deal) for deal in deals],
+                "provider_statuses": {
+                    name: presentation.provider_status_display(status)
+                    for name, status in provider_statuses.items()
+                },
+            }
         )
 
 

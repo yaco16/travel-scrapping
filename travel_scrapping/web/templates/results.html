@@ -12,7 +12,7 @@
 {% if deals %}
 <div class="table-wrapper">
   <table>
-    <tr><th>Mode</th><th>Destination</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Opérateur</th><th>Durée</th><th>Escales/Changements</th><th>Source</th><th>Confiance</th><th>Lien</th></tr>
+    <tr><th>Mode</th><th>Destination</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Provider</th><th>Statut provider</th><th>Opérateur</th><th>Durée</th><th>Escales/Changements</th><th>Confiance</th><th>Lien</th></tr>
     {% for deal in deals %}
     <tr>
       <td>{{ deal.transport_mode|mode_display }}</td>
@@ -20,16 +20,27 @@
       <td>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }}</td>
       <td>{{ deal.nights }}</td>
       <td>{{ deal.total_price_eur|price_display }}</td>
+      <td>{{ deal.provider or deal.source }}</td>
+      <td>{{ deal.provider_status|provider_status_display }}</td>
       <td>{{ deal.operator_name or deal.airlines_json|airlines_display }}</td>
       <td>{{ deal.duration_minutes|duration_display }}</td>
       <td>{{ deal.stops_count if deal.stops_count is not none else "" }}</td>
-      <td>{{ deal.source }}</td>
       <td>{{ deal.confidence }}</td>
       <td><a href="{{ deal.booking_url }}" rel="noreferrer">Voir l’offre</a></td>
     </tr>
     {% endfor %}
   </table>
 </div>
+{% if provider_statuses %}
+<section>
+  <h2>Statuts providers</h2>
+  <ul class="status-list">
+  {% for name, status in provider_statuses.items() %}
+    <li><strong>{{ name }}</strong> : {{ status|provider_status_display }}</li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
 {% else %}
 <p>Aucune offre exploitable trouvée.</p>
 <section>
