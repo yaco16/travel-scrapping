@@ -170,5 +170,10 @@ def latest_deals(settings: Settings, limit: int | None = None):
         return run, deals
 
 
-def run_search_sync(settings: Settings) -> int:
-    return asyncio.run(run_search(settings))
+def run_search_sync(
+    settings: Settings,
+    *,
+    modes: str = "flight",
+    depart_from: date | None = None,
+) -> int:
+    return asyncio.run(run_search(settings, modes=modes, depart_from=depart_from))

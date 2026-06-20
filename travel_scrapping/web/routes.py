@@ -23,7 +23,7 @@ from travel_scrapping.db import (
     valid_price_observation_clause,
 )
 from travel_scrapping.email.brevo import send_deals_email
-from travel_scrapping.search.engine import run_search_sync
+from travel_scrapping.search.engine import run_search
 from travel_scrapping.airports import resolve_airport
 from travel_scrapping.web import presentation
 
@@ -96,8 +96,15 @@ def latest_provider_statuses(session, run_id: int | None) -> dict[str, ProviderS
     return statuses
 
 
-def latest_display_deals(settings, session) -> tuple[SearchRun | None, list[Deal], dict[str, ProviderStatusRow]]:
-    run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
+def latest_display_deals(
+    settings,
+    session,
+    run_id: int | None = None,
+) -> tuple[SearchRun | None, list[Deal], dict[str, ProviderStatusRow]]:
+    if run_id is None:
+        run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
+    else:
+        run = session.get(SearchRun, run_id)
     statuses = latest_provider_statuses(session, run.id if run else None)
     deals = [deal for deal in list(run.deals) if valid_display_deal(deal, settings)] if run else []
     deals = sorted(deals, key=lambda deal: deal.total_price_eur)[: settings.top_results_limit]
@@ -149,18 +156,38 @@ def search_form(request: Request):
 
 
 @router.post("/run")
-def run_search_route():
+async def run_search_route(request: Request):
     settings = get_settings()
-    run_search_sync(settings)
-    return RedirectResponse("/results", status_code=303)
+    form = await request.form()
+    origin = str(form.get("origin_airport") or form.get("depart_from") or form.get("origin") or settings.origin_airport)
+    depart_from_raw = str(form.get("depart_date_min") or "")
+    depart_to_raw = str(form.get("depart_date_max") or form.get("search_end_date") or settings.search_end_date)
+    min_nights = int(str(form.get("min_nights") or settings.min_nights))
+    max_nights = int(str(form.get("max_nights") or settings.max_nights))
+    max_price = float(str(form.get("max_price") or settings.max_roundtrip_price_eur))
+    modes = ",".join(str(mode) for mode in form.getlist("modes")) or "all"
+    search_settings = settings.model_copy(
+        update={
+            "origin_airport": origin.upper(),
+            "search_end_date": date.fromisoformat(depart_to_raw),
+            "min_nights": min_nights,
+            "max_nights": max_nights,
+            "max_roundtrip_price_eur": max_price,
+        }
+    )
+    depart_from = date.fromisoformat(depart_from_raw) if depart_from_raw else None
+    run_id = await run_search(search_settings, modes=modes, depart_from=depart_from)
+    return RedirectResponse(f"/results?run_id={run_id}", status_code=303)
 
 
 @router.get("/results", response_class=HTMLResponse)
 def results(request: Request):
     settings = get_settings()
+    run_id_raw = request.query_params.get("run_id")
+    run_id = int(run_id_raw) if run_id_raw and run_id_raw.isdigit() else None
     factory = init_db(settings)
     with session_scope(factory) as session:
-        run, deals, provider_statuses = latest_display_deals(settings, session)
+        run, deals, provider_statuses = latest_display_deals(settings, session, run_id)
         return templates.TemplateResponse(
             request,
             "results.html",

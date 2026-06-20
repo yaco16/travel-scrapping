@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from travel_scrapping.config import get_settings
 from travel_scrapping.db import Deal, PriceObservation, ProviderStatusRow, SearchRun, init_db, session_scope
 from travel_scrapping.main import create_app
+from travel_scrapping.web import routes as web_routes
 
 
 def test_dashboard_routes_return_200(tmp_path, monkeypatch):
@@ -36,6 +37,39 @@ def test_main_menu_hides_sqlite(tmp_path, monkeypatch):
     assert '<a href="/history">Historique</a>' in response.text
 
 
+def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+
+    async def fake_run_search(settings, *, modes, depart_from):
+        assert settings.origin_airport == "NCE"
+        assert settings.min_nights == 3
+        assert settings.max_nights == 5
+        assert settings.max_roundtrip_price_eur == 100
+        assert modes == "flight,bus"
+        assert depart_from == date(2026, 7, 1)
+        return 42
+
+    monkeypatch.setattr(web_routes, "run_search", fake_run_search)
+    client = TestClient(create_app())
+    response = client.post(
+        "/run",
+        data={
+            "origin_airport": "NCE",
+            "depart_date_min": "2026-07-01",
+            "depart_date_max": "2026-08-30",
+            "min_nights": "3",
+            "max_nights": "5",
+            "max_price": "100",
+            "modes": ["flight", "bus"],
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/results?run_id=42"
+
+
 def test_sqlite_diagnostic_handles_null_dates(tmp_path, monkeypatch):
     get_settings.cache_clear()
     db_url = f"sqlite:///{tmp_path}/web.db"
@@ -60,6 +94,68 @@ def test_sqlite_diagnostic_handles_null_dates(tmp_path, monkeypatch):
     assert "Observations invalides: 1" in response.text
     assert "1 observations invalides historiques détectées" in response.text
     assert "None-None" not in response.text
+
+
+def test_results_filter_by_run_id(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        old_run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=45)
+        latest_run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=55)
+        session.add_all([old_run, latest_run])
+        session.flush()
+        session.add_all(
+            [
+                Deal(
+                    run_id=old_run.id,
+                    source="old",
+                    origin_airport="NCE",
+                    destination_airport="VCE",
+                    outbound_date=date(2026, 7, 2),
+                    return_date=date(2026, 7, 6),
+                    nights=4,
+                    total_price=45,
+                    currency="EUR",
+                    total_price_eur=45,
+                    airlines_json='["easyJet"]',
+                    operator_name="easyJet",
+                    booking_url="https://example.test/old",
+                    actionable=True,
+                    confidence="high",
+                    fetched_at=now,
+                ),
+                Deal(
+                    run_id=latest_run.id,
+                    source="latest",
+                    origin_airport="NCE",
+                    destination_airport="BCN",
+                    outbound_date=date(2026, 7, 2),
+                    return_date=date(2026, 7, 6),
+                    nights=4,
+                    total_price=55,
+                    currency="EUR",
+                    total_price_eur=55,
+                    airlines_json='["easyJet"]',
+                    operator_name="easyJet",
+                    booking_url="https://example.test/latest",
+                    actionable=True,
+                    confidence="high",
+                    fetched_at=now,
+                ),
+            ]
+        )
+        old_run_id = old_run.id
+
+    client = TestClient(create_app())
+    response = client.get(f"/results?run_id={old_run_id}")
+
+    assert response.status_code == 200
+    assert "Venise" in response.text
+    assert "Barcelone" not in response.text
+    assert "45,00 €" in response.text
 
 
 def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):

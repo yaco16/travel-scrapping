@@ -2,11 +2,14 @@
 {% block content %}
 <h1>Paramètres</h1>
 <form action="/run" method="post" class="grid">
-  <label>Origine <input name="origin" value="{{ settings.origin_airport }}"></label>
-<label>Date fin <input name="search_end_date" value="{{ settings.search_end_date }}"></label>
+  <label>Origine <input name="origin_airport" value="{{ settings.origin_airport }}"></label>
+  <label>Date départ min <input name="depart_date_min" type="date"></label>
+  <label>Date départ max <input name="depart_date_max" type="date" value="{{ settings.search_end_date }}"></label>
   <label>Nuits min <input name="min_nights" value="{{ settings.min_nights }}"></label>
   <label>Nuits max <input name="max_nights" value="{{ settings.max_nights }}"></label>
   <label>Prix max <input name="max_price" value="{{ settings.max_roundtrip_price_eur }}"></label>
+  <label><input name="modes" type="checkbox" value="flight" checked> Vol</label>
+  <label><input name="modes" type="checkbox" value="bus" checked> Bus</label>
   <label>Air max h <input name="max_air_time" value="{{ settings.max_air_time_hours }}"></label>
   <label>Escales max h <input name="max_layover" value="{{ settings.max_layover_hours }}"></label>
   <label>Email <input name="email_to" value="{{ settings.email_to }}"></label>
