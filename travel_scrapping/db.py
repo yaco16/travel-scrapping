@@ -31,6 +31,8 @@ class SearchRun(Base):
     rejected_count: Mapped[int] = mapped_column(Integer, default=0)
     cheapest_price_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     warnings_json: Mapped[str] = mapped_column(Text, default="[]")
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    providers_json: Mapped[str] = mapped_column(Text, default="[]")
     deals: Mapped[list["Deal"]] = relationship(back_populates="run")
 
 
@@ -256,7 +258,15 @@ def migrate_sqlite(engine) -> None:
         "request_params_json": "TEXT DEFAULT '{}'",
         "destination_examples_json": "TEXT DEFAULT '[]'",
     }
+    search_run_columns = {
+        "config_json": "TEXT DEFAULT '{}'",
+        "providers_json": "TEXT DEFAULT '[]'",
+    }
     with engine.begin() as conn:
+        existing_runs = {row[1] for row in conn.execute(text("PRAGMA table_info(search_runs)"))}
+        for name, column_type in search_run_columns.items():
+            if name not in existing_runs:
+                conn.execute(text(f"ALTER TABLE search_runs ADD COLUMN {name} {column_type}"))
         existing = {row[1] for row in conn.execute(text("PRAGMA table_info(price_observations)"))}
         for name, column_type in columns.items():
             if name not in existing:
@@ -292,6 +302,35 @@ def compress_payload(payload: dict) -> bytes:
 def raw_payload_hash(payload: dict) -> str:
     data = json.dumps(payload, sort_keys=True, ensure_ascii=True).encode()
     return hashlib.sha256(data).hexdigest()
+
+
+def run_config_snapshot(settings: Settings, *, modes: str = "flight") -> dict[str, object]:
+    return {
+        "origin_airport": settings.origin_airport,
+        "budget_eur": settings.max_roundtrip_price_eur,
+        "search_start_date": settings.search_start_date.isoformat() if settings.search_start_date else None,
+        "search_end_date": settings.effective_search_end_date.isoformat(),
+        "min_nights": settings.min_nights,
+        "max_nights": settings.max_nights,
+        "max_stops": settings.max_stops,
+        "top_results_limit": settings.top_results_limit,
+        "currency": settings.default_currency,
+        "modes": modes,
+    }
+
+
+def set_run_config_snapshot(run: SearchRun, settings: Settings, *, modes: str = "flight") -> None:
+    run.config_json = json.dumps(run_config_snapshot(settings, modes=modes), ensure_ascii=True)
+
+
+def run_config_data(run: SearchRun | None) -> dict[str, object]:
+    if not run:
+        return {}
+    try:
+        parsed = json.loads(run.config_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from travel_scrapping.config import Settings
 from travel_scrapping.bus.flixbus_rapidapi import FlixBusRapidApiProvider
 from travel_scrapping.db import ProviderStatusRow, SearchRun, init_db, save_deals, session_scope
+from travel_scrapping.db import set_run_config_snapshot
 from travel_scrapping.schemas import DealCandidate, Destination
 from travel_scrapping.search.date_grid import generate_roundtrip_dates
 from travel_scrapping.search.filters import validate_deal
@@ -93,10 +94,11 @@ def enrich_status(row: ProviderStatusRow, provider, *, accepted: int, rejected: 
     row.destination_examples_json = json.dumps(getattr(provider, "last_destination_examples", []) or [])
 
 
-def create_search_run(settings: Settings, *, status: str = "pending") -> int:
+def create_search_run(settings: Settings, *, status: str = "pending", modes: str = "flight") -> int:
     factory = init_db(settings)
     with session_scope(factory) as session:
         run = SearchRun(status=status)
+        set_run_config_snapshot(run, settings, modes=modes)
         session.add(run)
         session.flush()
         return run.id
@@ -127,6 +129,7 @@ async def run_search(
         with session_scope(factory) as session:
             if run_id is None:
                 run = SearchRun(status="running")
+                set_run_config_snapshot(run, settings, modes=modes)
                 session.add(run)
                 session.flush()
             else:
@@ -134,12 +137,16 @@ async def run_search(
                 if run is None:
                     raise ValueError(f"SearchRun {run_id} not found")
                 run.status = "running"
+                if not run.config_json or run.config_json == "{}":
+                    set_run_config_snapshot(run, settings, modes=modes)
             all_deals: list[DealCandidate] = []
             rejected = 0
+            provider_records: list[dict[str, object]] = []
             for provider in providers:
                 status = provider.status()
                 row = provider_status_row(run.id, status)
                 session.add(row)
+                provider_records.append({"name": status.name, "enabled": status.enabled, "role": provider_role(status.name)})
                 if not status.enabled:
                     continue
                 provider_accepted = 0
@@ -175,6 +182,7 @@ async def run_search(
                 status = bus_provider.status()
                 row = provider_status_row(run.id, status)
                 session.add(row)
+                provider_records.append({"name": status.name, "enabled": status.enabled, "role": provider_role(status.name)})
                 if status.enabled and date_pairs:
                     outbound, ret, _nights = date_pairs[0]
                     bus_accepted = 0
@@ -221,6 +229,7 @@ async def run_search(
             run.accepted_count = inserted
             run.rejected_count = rejected + (len(sorted_deals) - inserted)
             run.cheapest_price_eur = sorted_deals[0].total_price_eur if sorted_deals else None
+            run.providers_json = json.dumps(provider_records, ensure_ascii=True)
             return run.id
     except Exception as exc:
         if run_id is None:
@@ -252,3 +261,16 @@ def run_search_sync(
     run_id: int | None = None,
 ) -> int:
     return asyncio.run(run_search(settings, modes=modes, depart_from=depart_from, run_id=run_id))
+
+
+def provider_role(name: str) -> str:
+    roles = {
+        "serpapi_google_flights_deals": "primary",
+        "serpapi": "detail_probe",
+        "serpapi_google_flights": "detail_probe",
+        "travelpayouts": "optional",
+        "flixbus": "optional",
+        "flixbus_rapidapi": "optional",
+        "playwright_probe": "detail_probe",
+    }
+    return roles.get(name, "optional")

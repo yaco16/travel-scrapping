@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 
 from fastapi.testclient import TestClient
@@ -641,3 +642,137 @@ def test_results_show_google_flight_deals_comparison_and_destinations(tmp_path, 
     assert "Offres brutes : 4 · normalisées : 3 · acceptées : 3 · rejetées : 1" in response.text
     assert "Séville, Londres, Rome" in response.text
     assert "2026-07-01,2026-08-31" in response.text
+
+
+def test_results_use_run_snapshot_and_show_cheapest_first(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("MAX_ROUNDTRIP_PRICE_EUR", "100")
+    monkeypatch.setenv("MIN_NIGHTS", "3")
+    monkeypatch.setenv("MAX_NIGHTS", "5")
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 13, 33, 0)
+    config = {
+        "origin_airport": "NCE",
+        "budget_eur": 150,
+        "search_start_date": "2026-07-01",
+        "search_end_date": "2026-08-31",
+        "min_nights": 1,
+        "max_nights": 7,
+        "max_stops": 1,
+        "top_results_limit": 50,
+        "currency": "EUR",
+        "modes": "flight",
+    }
+    with session_scope(factory) as session:
+        run = SearchRun(
+            status="completed",
+            accepted_count=2,
+            rejected_count=1,
+            cheapest_price_eur=44,
+            config_json=json.dumps(config),
+        )
+        session.add(run)
+        session.flush()
+        session.add_all(
+            [
+                Deal(
+                    run_id=run.id,
+                    source="serpapi_google_flights_deals",
+                    provider="serpapi_google_flights_deals",
+                    origin_airport="NCE",
+                    destination_airport="IBZ",
+                    destination_city="Ibiza",
+                    outbound_date=date(2026, 8, 31),
+                    return_date=date(2026, 9, 4),
+                    nights=4,
+                    total_price=71,
+                    currency="EUR",
+                    total_price_eur=71,
+                    airlines_json='["easyJet"]',
+                    operator_name="easyJet",
+                    booking_url="https://example.test/ibz",
+                    actionable=True,
+                    confidence="high",
+                    fetched_at=now,
+                ),
+                Deal(
+                    run_id=run.id,
+                    source="serpapi_google_flights_deals",
+                    provider="serpapi_google_flights_deals",
+                    origin_airport="NCE",
+                    destination_airport="STN",
+                    destination_city="Londres",
+                    outbound_date=date(2026, 7, 21),
+                    return_date=date(2026, 7, 28),
+                    nights=7,
+                    total_price=44,
+                    currency="EUR",
+                    total_price_eur=44,
+                    airlines_json='["Ryanair"]',
+                    operator_name="Ryanair",
+                    booking_url="https://example.test/stn",
+                    actionable=True,
+                    confidence="high",
+                    fetched_at=now,
+                ),
+            ]
+        )
+        run_id = run.id
+
+    client = TestClient(create_app())
+    response = client.get(f"/results?run_id={run_id}")
+
+    assert response.status_code == 200
+    assert "44,00 €" in response.text
+    assert "2 offres affichées sur 2 acceptées" in response.text
+    assert "Meilleur prix" in response.text
+    assert "Budget max 150,00 EUR · 1-7 nuits" in response.text
+    assert "Budget max 100,00 EUR · 3-5 nuits" not in response.text
+    assert response.text.index("44,00 €") < response.text.index("71,00 €")
+
+
+def test_home_distinguishes_default_config_and_latest_run_snapshot(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("MAX_ROUNDTRIP_PRICE_EUR", "100")
+    monkeypatch.setenv("MIN_NIGHTS", "3")
+    monkeypatch.setenv("MAX_NIGHTS", "5")
+    factory = init_db(get_settings())
+    config = {
+        "origin_airport": "NCE",
+        "budget_eur": 150,
+        "search_start_date": "2026-07-01",
+        "search_end_date": "2026-08-31",
+        "min_nights": 1,
+        "max_nights": 7,
+        "max_stops": 1,
+        "top_results_limit": 50,
+        "currency": "EUR",
+        "modes": "flight",
+    }
+    with session_scope(factory) as session:
+        run = SearchRun(
+            started_at=datetime(2026, 6, 20, 13, 33),
+            status="completed",
+            accepted_count=28,
+            rejected_count=2,
+            cheapest_price_eur=44,
+            config_json=json.dumps(config),
+        )
+        session.add(run)
+        session.flush()
+        run_id = run.id
+
+    client = TestClient(create_app())
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Configuration par défaut" in response.text
+    assert "Budget max 100,00 EUR · 3-5 nuits" in response.text
+    assert "Dernier run" in response.text
+    assert "Budget max 150,00 EUR · 1-7 nuits" in response.text
+    assert f'href="/results?run_id={run_id}"' in response.text
+    assert "Relancer avec cette configuration" in response.text

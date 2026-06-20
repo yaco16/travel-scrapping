@@ -1,14 +1,95 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Vols pas chers depuis Nice</h1>
-{% for warning in warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
-<section>
-  <h2>Configuration</h2>
-  <p>{{ configuration_summary }}</p>
-  <form action="/run" method="post"><button type="submit">Lancer recherche</button></form>
+<section class="hero">
+  <div>
+    <p class="eyebrow">Dashboard local</p>
+    <h1>Vols pas chers depuis Nice</h1>
+    <p class="hero-subtitle">Destination libre, budget maîtrisé, résultats historisés par run.</p>
+  </div>
 </section>
-<section>
-  <h2>Dernier run</h2>
-  {% if run %}<p>#{{ run.id }} · {{ run.status }} · {{ run.accepted_count }} deals · meilleur prix {{ run.cheapest_price_eur or "-" }} EUR</p>{% else %}<p>Aucun run.</p>{% endif %}
+
+{% for warning in warnings %}
+<p class="warning compact">{{ warning }}</p>
+{% endfor %}
+
+<div class="page-grid">
+  <section class="panel">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">Nouvelle recherche</p>
+        <h2>Configuration par défaut</h2>
+      </div>
+    </div>
+    <p class="summary">{{ configuration_summary }}</p>
+    <form action="/run" method="post" class="form-grid">
+      <label>Origine <input name="origin_airport" value="{{ default_config.origin_airport }}"></label>
+      <label>Date départ min <input name="depart_date_min" type="date" value="{{ default_config.search_start_date }}"></label>
+      <label>Date départ max <input name="depart_date_max" type="date" value="{{ default_config.search_end_date }}"></label>
+      <label>Nuits min <input name="min_nights" value="{{ default_config.min_nights }}"></label>
+      <label>Nuits max <input name="max_nights" value="{{ default_config.max_nights }}"></label>
+      <label>Prix max <input name="max_price" value="{{ default_config.budget_eur }}"></label>
+      <label>Correspondances max <input name="max_stops" value="{{ default_config.max_stops }}"></label>
+      <input name="modes" type="hidden" value="flight">
+      <button type="submit">Lancer recherche</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">Historique</p>
+        <h2>Dernier run</h2>
+      </div>
+      {% if run %}<span class="badge">#{{ run.id }}</span>{% endif %}
+    </div>
+    {% if run %}
+    <dl class="run-facts">
+      <div><dt>Date</dt><dd>{{ run.started_at|date_time }}</dd></div>
+      <div><dt>Statut</dt><dd>{{ run.status }}</dd></div>
+      <div><dt>Offres</dt><dd>{{ run.accepted_count }} acceptées · {{ run.rejected_count }} rejetées</dd></div>
+      <div><dt>Meilleur prix</dt><dd>{{ run.cheapest_price_eur|price_display }}</dd></div>
+      <div><dt>Config du run</dt><dd>{{ run_config.summary }}</dd></div>
+    </dl>
+    <div class="button-row">
+      <a class="button" href="/results?run_id={{ run.id }}">Voir les résultats</a>
+      <form action="/run" method="post" class="inline-form">
+        <input name="origin_airport" type="hidden" value="{{ run_config.origin_airport }}">
+        <input name="depart_date_min" type="hidden" value="{{ run_config.search_start_date }}">
+        <input name="depart_date_max" type="hidden" value="{{ run_config.search_end_date }}">
+        <input name="min_nights" type="hidden" value="{{ run_config.min_nights }}">
+        <input name="max_nights" type="hidden" value="{{ run_config.max_nights }}">
+        <input name="max_price" type="hidden" value="{{ run_config.budget_eur }}">
+        <input name="max_stops" type="hidden" value="{{ run_config.max_stops }}">
+        <input name="modes" type="hidden" value="flight">
+        <button type="submit" class="secondary">Relancer avec cette configuration</button>
+      </form>
+    </div>
+    {% else %}
+    <p>Aucun run.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="panel">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">Providers</p>
+      <h2>État fournisseurs</h2>
+    </div>
+  </div>
+  <div class="provider-list">
+    {% for item in provider_groups.active %}
+    <span class="provider-pill ok">{{ item.name }} · {{ item.role }}</span>
+    {% endfor %}
+    {% for item in provider_groups.disabled %}
+    <span class="provider-pill muted">{{ item.name }} · désactivé</span>
+    {% endfor %}
+    {% for item in provider_groups.advanced %}
+    <span class="provider-pill muted">{{ item.name }} · diagnostic avancé</span>
+    {% endfor %}
+    {% if not provider_groups.active and not provider_groups.disabled and not provider_groups.advanced %}
+    <span class="provider-pill muted">Aucun diagnostic provider disponible</span>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}

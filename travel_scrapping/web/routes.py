@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import date
+from types import SimpleNamespace
 from typing import cast
 
 from fastapi import APIRouter, BackgroundTasks, Request
@@ -19,6 +20,7 @@ from travel_scrapping.db import (
     SearchRun,
     init_db,
     invalid_price_observation_clause,
+    run_config_data,
     session_scope,
     valid_price_observation_clause,
 )
@@ -43,23 +45,15 @@ router = APIRouter()
 TERMINAL_RUN_STATUSES = {"completed", "failed"}
 
 
-def valid_display_deal(deal: Deal, settings) -> bool:
+def valid_display_deal(deal: Deal) -> bool:
     if not deal.outbound_date or not deal.return_date:
         return False
     outbound_date = cast(date, deal.outbound_date)
     return_date = cast(date, deal.return_date)
     nights = (return_date - outbound_date).days
     if nights != deal.nights:
-        deal.nights = nights
-    if not settings.min_nights <= nights <= settings.max_nights:
         return False
-    if outbound_date > settings.effective_search_end_date:
-        return False
-    if settings.search_start_date is not None and outbound_date < settings.search_start_date:
-        return False
-    if deal.total_price_eur is None or deal.total_price_eur > settings.max_roundtrip_price_eur:
-        return False
-    if deal.stops_count is not None and deal.stops_count > settings.max_stops:
+    if deal.total_price_eur is None:
         return False
     if not deal.actionable or not deal.booking_url or not deal.operator_name:
         return False
@@ -156,20 +150,159 @@ def latest_display_deals(
     settings,
     session,
     run_id: int | None = None,
+    mode: str | None = None,
 ) -> tuple[SearchRun | None, list[Deal], dict[str, ProviderStatusRow]]:
     if run_id is None:
         run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
     else:
         run = session.get(SearchRun, run_id)
     statuses = latest_provider_statuses(session, run.id if run else None)
-    deals = [deal for deal in list(run.deals) if valid_display_deal(deal, settings)] if run else []
-    deals = sorted(deals, key=lambda deal: deal.total_price_eur)[: settings.top_results_limit]
+    deals = [deal for deal in list(run.deals) if valid_display_deal(deal)] if run else []
+    if mode in {"flight", "bus"}:
+        deals = [deal for deal in deals if deal.transport_mode == mode]
+    deals = sorted(
+        deals,
+        key=lambda deal: (
+            float(deal.total_price_eur),
+            cast(date, deal.outbound_date),
+            deal.destination_city or deal.destination_airport,
+        ),
+    )
     for deal in deals:
         deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
             deal.destination_airport, settings, session
         ).info.display_name
         deal.provider_status = statuses.get(deal.provider or deal.source) or statuses.get(deal.source)  # type: ignore[attr-defined]
     return run, deals, statuses
+
+
+def run_config_context(run: SearchRun | None, settings, statuses: dict[str, ProviderStatusRow] | None = None):
+    data = run_config_data(run)
+    statuses = statuses or {}
+    if not data and statuses:
+        data = legacy_config_from_statuses(run, statuses)
+    origin = str(data.get("origin_airport") or settings.origin_airport)
+    budget = numeric_config_value(data.get("budget_eur"), settings.max_roundtrip_price_eur)
+    start_raw = data.get("search_start_date") or settings.search_start_date
+    end_raw = data.get("search_end_date") or settings.effective_search_end_date
+    min_nights = int_config_value(data.get("min_nights"), settings.min_nights)
+    max_nights = int_config_value(data.get("max_nights"), settings.max_nights)
+    max_stops = int_config_value(data.get("max_stops"), settings.max_stops)
+    ctx = {
+        "origin_airport": origin,
+        "budget_eur": budget,
+        "search_start_date": str(start_raw) if start_raw else "",
+        "search_end_date": str(end_raw) if end_raw else "",
+        "min_nights": min_nights,
+        "max_nights": max_nights,
+        "max_stops": max_stops,
+        "top_results_limit": int_config_value(data.get("top_results_limit"), settings.top_results_limit),
+        "currency": str(data.get("currency") or settings.default_currency),
+        "modes": str(data.get("modes") or "flight"),
+    }
+    summary_settings = SimpleNamespace(
+        origin_airport=ctx["origin_airport"],
+        max_roundtrip_price_eur=ctx["budget_eur"],
+        search_start_date=ctx["search_start_date"],
+        effective_search_end_date=ctx["search_end_date"],
+        min_nights=ctx["min_nights"],
+        max_nights=ctx["max_nights"],
+        max_stops=ctx["max_stops"],
+    )
+    ctx["summary"] = presentation.configuration_summary(summary_settings)
+    return ctx
+
+
+def int_config_value(value: object, fallback: int) -> int:
+    try:
+        return int(str(value)) if value not in (None, "") else fallback
+    except ValueError:
+        return fallback
+
+
+def numeric_config_value(value: object, fallback: float) -> float:
+    try:
+        return float(str(value)) if value not in (None, "") else fallback
+    except ValueError:
+        return fallback
+
+
+def legacy_config_from_statuses(run: SearchRun | None, statuses: dict[str, ProviderStatusRow]) -> dict[str, object]:
+    status = statuses.get("serpapi_google_flights_deals") or statuses.get("serpapi")
+    params: dict[str, object] = {}
+    if status:
+        try:
+            loaded = json.loads(status.request_params_json or "{}")
+            params = loaded if isinstance(loaded, dict) else {}
+        except json.JSONDecodeError:
+            params = {}
+    outbound = str(params.get("outbound_date") or "")
+    start, end = (outbound.split(",", 1) + [""])[:2] if "," in outbound else ("", outbound)
+    trip_length = str(params.get("trip_length") or "")
+    min_nights, max_nights = (trip_length.split(",", 1) + [""])[:2] if "," in trip_length else ("", "")
+    google_stops = int(str(params.get("stops") or "2"))
+    return {
+        "origin_airport": params.get("departure_id") or first_run_origin(run),
+        "budget_eur": float(str(params.get("max_price") or 0) or 0),
+        "search_start_date": start or None,
+        "search_end_date": end or None,
+        "min_nights": int(min_nights or 1),
+        "max_nights": int(max_nights or 7),
+        "max_stops": max(0, google_stops - 1),
+        "top_results_limit": run.accepted_count if run and run.accepted_count else 50,
+        "currency": params.get("currency") or "EUR",
+        "modes": "flight",
+    }
+
+
+def first_run_origin(run: SearchRun | None) -> str:
+    if run and run.deals:
+        return str(run.deals[0].origin_airport)
+    return "NCE"
+
+
+def provider_groups(statuses: dict[str, ProviderStatusRow]) -> dict[str, list[dict[str, object]]]:
+    groups: dict[str, list[dict[str, object]]] = {"active": [], "disabled": [], "advanced": []}
+    for name, status in statuses.items():
+        role = provider_role(name)
+        blocked = provider_blocked(status)
+        item = {"name": name, "status": status, "role": role, "blocked": blocked}
+        if status.enabled and not blocked and role in {"primary", "optional"}:
+            groups["active"].append(item)
+        elif role == "detail_probe":
+            groups["advanced"].append(item)
+        else:
+            groups["disabled"].append(item)
+    return groups
+
+
+def provider_rows(groups: dict[str, list[dict[str, object]]]) -> list[dict[str, object]]:
+    return groups["active"] + groups["disabled"] + groups["advanced"]
+
+
+def provider_role(name: str) -> str:
+    roles = {
+        "serpapi_google_flights_deals": "primary",
+        "serpapi": "detail_probe",
+        "serpapi_google_flights": "detail_probe",
+        "travelpayouts": "optional",
+        "flixbus": "optional",
+        "flixbus_rapidapi": "optional",
+        "playwright_probe": "detail_probe",
+    }
+    return roles.get(name, "optional")
+
+
+def provider_blocked(status: ProviderStatusRow) -> bool:
+    if not status.enabled:
+        return True
+    if status.name in {"flixbus", "flixbus_rapidapi"} and status.http_status in {403, 429}:
+        return True
+    if status.name == "travelpayouts" and not status.attempted and (status.accepted_count or 0) == 0:
+        return True
+    if status.name == "playwright_probe":
+        return True
+    return False
 
 
 def deal_payload(deal: Deal) -> dict[str, object]:
@@ -219,14 +352,20 @@ def home(request: Request):
     factory = init_db(settings)
     with session_scope(factory) as session:
         run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
+        statuses = latest_provider_statuses(session, run.id if run else None)
+        default_config = run_config_context(None, settings)
+        last_run_config = run_config_context(run, settings, statuses) if run else None
         return templates.TemplateResponse(
             request,
             "home.html",
             {
                 "settings": safe_settings_dict(settings),
-                "configuration_summary": presentation.configuration_summary(settings),
+                "default_config": default_config,
+                "configuration_summary": default_config["summary"],
                 "warnings": settings.warnings(),
                 "run": run,
+                "run_config": last_run_config,
+                "provider_groups": provider_groups(statuses),
             },
         )
 
@@ -290,9 +429,13 @@ def results(request: Request):
     settings = get_settings()
     run_id_raw = request.query_params.get("run_id")
     run_id = int(run_id_raw) if run_id_raw and run_id_raw.isdigit() else None
+    mode = request.query_params.get("mode")
     factory = init_db(settings)
     with session_scope(factory) as session:
-        run, deals, provider_statuses = latest_display_deals(settings, session, run_id)
+        run, deals, provider_statuses = latest_display_deals(settings, session, run_id, mode)
+        all_run_deals = [deal for deal in list(run.deals) if valid_display_deal(deal)] if run else []
+        cheapest = min((deal.total_price_eur for deal in all_run_deals), default=None)
+        groups = provider_groups(provider_statuses)
         return templates.TemplateResponse(
             request,
             "results.html",
@@ -300,10 +443,18 @@ def results(request: Request):
                 "run": run,
                 "run_terminal": bool(run and run.status in TERMINAL_RUN_STATUSES),
                 "deals": deals,
+                "accepted_display_count": len(deals),
+                "accepted_total_count": run.accepted_count if run else 0,
+                "best_price": cheapest,
                 "provider_statuses": provider_statuses,
+                "provider_groups": groups,
+                "provider_rows": provider_rows(groups),
+                "active_provider_count": len(groups["active"]),
                 "processing_steps": presentation.processing_steps(run, len(deals)),
                 "email_enabled": settings.email_enabled,
                 "diagnostics": diagnostics_context(settings, session, run),
+                "run_config": run_config_context(run, settings, provider_statuses) if run else None,
+                "mode": mode or "all",
             },
         )
 

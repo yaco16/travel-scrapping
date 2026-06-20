@@ -22,3 +22,16 @@ def test_template_jinja_filters_are_registered_in_app_environment():
     assert EXPECTED_TEMPLATE_FILTERS <= used_filters
     assert EXPECTED_TEMPLATE_FILTERS <= set(templates.env.filters)
     assert used_filters <= set(templates.env.filters)
+
+
+def test_key_ui_elements_exist_in_templates():
+    assert templates.env.loader is not None
+    results, _, _ = templates.env.loader.get_source(templates.env, "results.html")
+    home, _, _ = templates.env.loader.get_source(templates.env, "home.html")
+
+    assert "results-hero" in results
+    assert "metric-card" in results
+    assert "offres affichées sur" in results
+    assert "Meilleur prix" in results
+    assert "Providers désactivés" in results
+    assert "Dernier run" in home

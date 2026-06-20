@@ -4,6 +4,13 @@
 
 Travel Scrapping MVP construit localement :
 
+- Étape 01 - Tranche `016-run-snapshot-results-ui-providers` archivee dans `docs/tasks/archive/016-run-snapshot-results-ui-providers.md`.
+- Étape 02 - Cause `44,00 €` corrigee: `/results` reappliquait `.env` courant `100 EUR` / `3-5 nuits` au lieu du snapshot run; STN `44,00 €` etait en DB/agregat mais filtree.
+- Étape 03 - `search_runs` stocke `config_json` et `providers_json`; `/results`, homepage et historique affichent les chiffres/config du run, avec fallback legacy depuis diagnostics provider.
+- Étape 04 - `/results` affiche toutes les offres acceptees du run, tri prix/date/destination, compteur `offres affichées sur acceptées`, badge `Meilleur prix`; smoke reel run #11 valide `28` acceptees, `2` rejetees, meilleur prix `44,00 €`.
+- Étape 05 - Homepage refaite: configuration par defaut separee du dernier run, carte dernier run avec ID/date/statut/config/offres/meilleur prix, boutons `Voir les résultats` et `Relancer avec cette configuration`.
+- Étape 06 - CSS homepage/resultats refait avec skill globale `prototype`: hero, metriques, tabs, cards resultats, providers, diagnostics secondaires, responsive mobile.
+- Étape 07 - Providers rationalises dans `docs/providers.md`: SerpApi Deals primaire, SerpApi Flights probe detail, Travelpayouts optional desactive sans marker, FlixBus optional masque si `403/429`, Playwright probe diagnostics avances.
 - Étape 01 - Alignement Google Flight Deals archive dans `docs/tasks/archive/015-google-flight-deals-alignment.md`.
 - Étape 02 - Cause corrigee: recherche locale utilisait `google_flights` avec destination imposee, anciens parametres `100 EUR` / `3-5 nuits`, et filtre retour avant fin de fenetre; elle utilise maintenant `google_flights_deals` destination libre.
 - Étape 03 - Parametres Deals visibles et sans secret: `departure_id=NCE`, `outbound_date=2026-07-01,2026-08-31`, `trip_length=1,7`, `max_price=150`, `stops=2`, `currency=EUR`, `gl=fr`, `hl=fr`, `adults=1`, sans `return_date`.
