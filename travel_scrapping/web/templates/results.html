@@ -11,7 +11,7 @@
     <h1>{% if run %}Run #{{ run.id }}{% else %}Aucun run{% endif %}</h1>
     {% if run_config %}<p class="hero-subtitle">{{ run_config.summary }}</p>{% endif %}
   </div>
-  {% if run %}<strong class="status-badge">{{ run.status }}</strong>{% endif %}
+  {% if run %}<strong class="status-badge {{ 'pending-blink' if run.status == 'pending' else '' }}">{{ run.status }}</strong>{% endif %}
 </section>
 
 {% if run %}
@@ -38,7 +38,7 @@
   </div>
   <ol class="status-list">
   {% for step in processing_steps %}
-    <li>{{ step }}</li>
+    <li><span class="step-spinner" aria-hidden="true"></span><span>{{ step }}</span>{% if run and run.status == "pending" %}<span class="step-state pending-blink">pending</span>{% endif %}</li>
   {% endfor %}
   </ol>
 </section>
@@ -47,11 +47,12 @@
 <form action="/email" method="post"><button type="submit">Envoyer email</button></form>
 {% endif %}
 
+<div id="results-offers-panel">
 {% if run %}
 <nav class="tabs">
-  <a class="{{ 'active' if mode == 'all' else '' }}" href="/results?run_id={{ run.id }}">Tous</a>
-  <a class="{{ 'active' if mode == 'flight' else '' }}" href="/results?run_id={{ run.id }}&mode=flight">Avion</a>
-  <a class="{{ 'active' if mode == 'bus' else '' }}" href="/results?run_id={{ run.id }}&mode=bus">Bus</a>
+  <a class="{{ 'active' if mode == 'all' else '' }}" href="/results?run_id={{ run.id }}#results-offers-panel">Tous</a>
+  <a class="{{ 'active' if mode == 'flight' else '' }}" href="/results?run_id={{ run.id }}&mode=flight#results-offers-panel">Avion</a>
+  <a class="{{ 'active' if mode == 'bus' else '' }}" href="/results?run_id={{ run.id }}&mode=bus#results-offers-panel">Bus</a>
 </nav>
 {% endif %}
 
@@ -75,7 +76,7 @@
             <span class="badge muted">{{ deal.confidence }}</span>
             {% if deal.total_price_eur == best_price %}<span class="badge best-badge">Meilleur prix</span>{% endif %}
           </div>
-          <h3><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a></h3>
+          <h3><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a>{% if deal.destination_country %}<span class="destination-country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h3>
           <p>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits · {{ deal.operator_name or deal.airlines_json|airlines_display }}</p>
         </div>
         <div class="price-block">
@@ -95,6 +96,7 @@
   <p>{{ diagnostics.no_offer_message }}</p>
   {% endif %}
 </section>
+</div>
 
 {% if diagnostics.google_flight_deals %}
 <details class="panel details-panel">
@@ -152,8 +154,5 @@
       {% endfor %}
     </table>
   </div>
-  {% if diagnostics.travelpayouts_marker_present == false %}
-  <p class="warning compact">Travelpayouts : endpoints nécessitant un marker désactivés, TRAVELPAYOUTS_MARKER absent.</p>
-  {% endif %}
 </details>
 {% endblock %}
