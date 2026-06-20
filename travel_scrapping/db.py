@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import zlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 from travel_scrapping.config import Settings
@@ -70,6 +71,20 @@ class PriceObservation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     route_key: Mapped[str] = mapped_column(String(128), index=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    origin_iata: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    destination_iata: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    destination_city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    departure_date: Mapped[object | None] = mapped_column(Date, nullable=True)
+    return_date: Mapped[object | None] = mapped_column(Date, nullable=True)
+    nights: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    airline: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    warnings: Mapped[str | None] = mapped_column(Text, nullable=True)
+    booking_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     price_eur: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(64))
 
@@ -95,7 +110,34 @@ def engine_from_settings(settings: Settings):
 def init_db(settings: Settings) -> sessionmaker[Session]:
     engine = engine_from_settings(settings)
     Base.metadata.create_all(engine)
+    migrate_sqlite(engine)
     return sessionmaker(engine, expire_on_commit=False)
+
+
+def migrate_sqlite(engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    columns = {
+        "run_id": "INTEGER",
+        "origin_iata": "VARCHAR(8)",
+        "destination_iata": "VARCHAR(8)",
+        "destination_city": "VARCHAR(128)",
+        "departure_date": "DATE",
+        "return_date": "DATE",
+        "nights": "INTEGER",
+        "price": "FLOAT",
+        "currency": "VARCHAR(8)",
+        "airline": "VARCHAR(64)",
+        "confidence": "VARCHAR(16)",
+        "warnings": "TEXT",
+        "booking_url": "TEXT",
+        "raw_payload_hash": "VARCHAR(64)",
+    }
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(price_observations)"))}
+        for name, column_type in columns.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE price_observations ADD COLUMN {name} {column_type}"))
 
 
 @contextmanager
@@ -114,6 +156,11 @@ def session_scope(factory: sessionmaker[Session]) -> Iterator[Session]:
 def compress_payload(payload: dict) -> bytes:
     data = json.dumps(payload, ensure_ascii=True)[:20_000].encode()
     return zlib.compress(data)
+
+
+def raw_payload_hash(payload: dict) -> str:
+    data = json.dumps(payload, sort_keys=True, ensure_ascii=True).encode()
+    return hashlib.sha256(data).hexdigest()
 
 
 def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
@@ -152,6 +199,21 @@ def save_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> 
         session.add(
             PriceObservation(
                 route_key=deal.route_key,
+                observed_at=deal.fetched_at.replace(tzinfo=None),
+                run_id=run.id,
+                origin_iata=deal.origin_airport,
+                destination_iata=deal.destination_airport,
+                destination_city=deal.destination_city,
+                departure_date=deal.outbound_date,
+                return_date=deal.return_date,
+                nights=deal.nights,
+                price=deal.total_price,
+                currency=deal.currency,
+                airline=", ".join(deal.airlines) if deal.airlines else None,
+                confidence=deal.confidence,
+                warnings=json.dumps(deal.warnings),
+                booking_url=deal.booking_url,
+                raw_payload_hash=raw_payload_hash(deal.raw_payload),
                 price_eur=float(deal.total_price_eur or deal.total_price),
                 source=deal.source,
             )

@@ -49,3 +49,28 @@ def test_air_time_rejection():
     assert not ok
     assert "outbound air time too long" in reasons
     assert "return air time too long" in reasons
+
+
+def test_reject_55_nights_after_normalization():
+    d = deal(
+        destination_airport="BTS",
+        outbound_date=date(2026, 7, 2),
+        return_date=date(2026, 8, 26),
+        nights=3,
+        total_price=55,
+    )
+    ok, reasons = validate_deal(d, Settings(_env_file=None, min_nights=3, max_nights=5), today=date(2026, 6, 1))
+    assert not ok
+    assert d.nights == 55
+    assert "night range mismatch" in reasons
+
+
+def test_reject_return_after_search_end_date():
+    d = deal(outbound_date=date(2026, 8, 26), return_date=date(2026, 8, 31), nights=5)
+    ok, reasons = validate_deal(
+        d,
+        Settings(_env_file=None, search_end_date=date(2026, 8, 30), min_nights=3, max_nights=5),
+        today=date(2026, 6, 1),
+    )
+    assert not ok
+    assert "return after search end date" in reasons

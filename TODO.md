@@ -1,5 +1,5 @@
 # TODO
 
-- Configurer `EMAIL_FROM` si email réel attendu.
+- Configurer `.env` avec clés providers réelles si smoke live attendu.
 - Lancer un smoke SerpAPI minimal avec clé réelle.
 - Ajuster normalisation SerpAPI selon payload live observé.

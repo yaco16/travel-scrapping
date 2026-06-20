@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>SQLite</h1>
+<p>Campagnes: {{ runs_count }}</p>
+<p>Observations: {{ observations_count }}</p>
+
+<h2>20 dernières observations</h2>
+<table>
+  <tr><th>ID</th><th>Run</th><th>Trajet</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Source</th><th>Compagnie</th></tr>
+  {% for row in latest %}
+  <tr>
+    <td>{{ row.id }}</td>
+    <td>{{ row.run_id }}</td>
+    <td>{{ row.origin_iata }}-{{ row.destination_iata }}</td>
+    <td>{{ row.departure_date|short_date }} - {{ row.return_date|short_date }}</td>
+    <td>{{ row.nights }}</td>
+    <td>{{ row.price|price_display }} {{ row.currency }}</td>
+    <td>{{ row.source }}</td>
+    <td>{{ row.airline or "Non communiqué" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Variations détectées</h2>
+<table>
+  <tr><th>Origine</th><th>Destination</th><th>Départ</th><th>Retour</th><th>Nuits</th><th>Source</th></tr>
+  {% for row in variations %}
+  <tr>
+    <td>{{ row.origin_iata }}</td>
+    <td>{{ row.destination_iata }}</td>
+    <td>{{ row.departure_date|short_date }}</td>
+    <td>{{ row.return_date|short_date }}</td>
+    <td>{{ row.nights }}</td>
+    <td>{{ row.source }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

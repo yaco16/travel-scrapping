@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     default_currency: str = "EUR"
     default_locale: str = "fr-FR"
     default_market: str = "FR"
-    date_to: date = date(2026, 8, 31)
+    search_end_date: date = date(2026, 8, 30)
+    date_to: date | None = None
     min_nights: int = 3
     max_nights: int = 5
     max_roundtrip_price_eur: float = 100
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
     travelpayouts_marker: str = ""
     kiwi_tequila_api_key: str = ""
     brevo_api_key: str = ""
+    email_enabled: bool = False
     email_from: str = ""
     email_from_name: str = "Travel Scrapping"
     email_to: str = "kwad16@gmail.com"
@@ -57,9 +59,11 @@ class Settings(BaseSettings):
         warnings: list[str] = []
         if self.app_host == "0.0.0.0":
             warnings.append("App exposed on 0.0.0.0 without authentication.")
-        if not self.email_from:
+        if self.date_to is not None:
+            warnings.append("DATE_TO is deprecated; use SEARCH_END_DATE.")
+        if self.email_enabled and not self.email_from:
             warnings.append("EMAIL_FROM missing; email sending disabled.")
-        if not self.brevo_api_key:
+        if self.email_enabled and not self.brevo_api_key:
             warnings.append("BREVO_API_KEY missing; email sending disabled.")
         if not self.serpapi_api_key:
             warnings.append("SERPAPI_API_KEY missing; SerpAPI provider skipped.")
@@ -68,6 +72,10 @@ class Settings(BaseSettings):
         if self.travelpayouts_token and not self.travelpayouts_marker:
             warnings.append("TRAVELPAYOUTS_MARKER missing; marker-required endpoints disabled.")
         return warnings
+
+    @property
+    def effective_search_end_date(self) -> date:
+        return self.date_to or self.search_end_date
 
 
 SECRET_FIELDS = {

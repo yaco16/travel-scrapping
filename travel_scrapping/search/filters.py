@@ -10,10 +10,16 @@ def validate_deal(deal: DealCandidate, settings: Settings, *, today: date | None
     reasons: list[str] = []
     warnings = list(deal.warnings)
     today = today or date.today()
+    normalized_nights = (deal.return_date - deal.outbound_date).days
+    deal.nights = normalized_nights
     if deal.origin_airport != settings.origin_airport:
         reasons.append("origin mismatch")
-    if deal.return_date <= deal.outbound_date or deal.nights < 1:
+    if deal.return_date <= deal.outbound_date or normalized_nights < 1:
         reasons.append("invalid return date")
+    if not settings.min_nights <= normalized_nights <= settings.max_nights:
+        reasons.append("night range mismatch")
+    if deal.return_date > settings.effective_search_end_date:
+        reasons.append("return after search end date")
     if deal.outbound_date < today:
         reasons.append("past outbound date")
     if deal.total_price <= 0:

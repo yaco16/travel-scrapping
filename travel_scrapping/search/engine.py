@@ -44,7 +44,7 @@ async def run_search(settings: Settings, *, providers: list[FlightProvider] | No
     destinations = load_destinations()
     date_pairs = generate_roundtrip_dates(
         today=date.today(),
-        date_to=settings.date_to,
+        date_to=settings.effective_search_end_date,
         min_nights=settings.min_nights,
         max_nights=settings.max_nights,
     )

@@ -6,10 +6,12 @@ Travel Scrapping MVP construit localement :
 
 - FastAPI + HTMX dashboard sans auth, host par défaut `127.0.0.1`.
 - SQLite avec runs, deals, observations prix, statuts providers.
-- Date grid NCE round-trip 3-5 nuits jusqu'au 2026-08-31.
+- Date grid NCE round-trip 3-5 nuits jusqu'au `SEARCH_END_DATE=2026-08-30`.
 - Filtrage budget strict `< 100 EUR`, layover, air time, overnight airport.
 - Providers SerpAPI, Travelpayouts, Playwright safe skeleton, tous désactivables sans crash.
-- Email Brevo désactivé si `BREVO_API_KEY` ou `EMAIL_FROM` absent.
+- Resultats UI normalises : ville francaise, dates JJ/MM/AA, prix entier, compagnies/warnings/lien lisibles.
+- Email Brevo optionnel et masque par defaut via `EMAIL_ENABLED=false`.
+- Historique `price_observations` append-only enrichi, diagnostic CLI et `/sqlite`.
 - CLI, README, `.env.example`, tests et coverage.
 
 ## Limite

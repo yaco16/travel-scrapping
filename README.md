@@ -2,7 +2,7 @@
 
 FastAPI + HTMX dashboard for very cheap round-trip flight deals from Nice (NCE).
 
-Defaults: one adult, personal item only, no checked/cabin bag, 3-5 nights, under 100 EUR total, from today to 2026-08-31, max 5h air time per direction, max 3h layover, no overnight airport stay.
+Defaults: one adult, personal item only, no checked/cabin bag, 3-5 nights, under 100 EUR total, from today to 2026-08-30, max 5h air time per direction, max 3h layover, no overnight airport stay.
 
 ## Setup
 
@@ -27,8 +27,21 @@ Open `http://127.0.0.1:8000`.
 .venv/bin/python -m travel_scrapping.cli config
 .venv/bin/python -m travel_scrapping.cli search
 .venv/bin/python -m travel_scrapping.cli top
+.venv/bin/python -m travel_scrapping.cli sqlite-diagnostics
 .venv/bin/python -m travel_scrapping.cli search --send-email
 ```
+
+## Vérifier SQLite
+
+```bash
+.venv/bin/python -m travel_scrapping.cli sqlite-diagnostics
+sqlite3 data/travel_scrapping.db "select count(*) from search_runs;"
+sqlite3 data/travel_scrapping.db "select count(*) from price_observations;"
+sqlite3 data/travel_scrapping.db "select observed_at, run_id, source, origin_iata, destination_iata, departure_date, return_date, nights, price, currency, airline from price_observations order by id desc limit 20;"
+sqlite3 data/travel_scrapping.db "select origin_iata, destination_iata, departure_date, return_date, nights, min(price), max(price), count(*) from price_observations group by origin_iata, destination_iata, departure_date, return_date, nights having count(*) > 1;"
+```
+
+Dashboard: `http://127.0.0.1:8000/sqlite`.
 
 ## Tests
 
@@ -45,7 +58,7 @@ Missing provider keys skip providers instead of crashing.
 
 ## Email
 
-Brevo transactional email API is used. `BREVO_API_KEY` and `EMAIL_FROM` are required. Without sender, email is disabled and dashboard warns.
+Brevo transactional email API is optional. `EMAIL_ENABLED=false` hides email actions. If enabled, `BREVO_API_KEY` and `EMAIL_FROM` are required.
 
 ## Confidence
 
