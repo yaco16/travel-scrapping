@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     distribusion_api_key: str = ""
     distribusion_base_url: str = ""
     distribusion_partner_id: str = ""
+    ryanair_enabled: bool = True
+    amadeus_client_id: str = ""
+    amadeus_client_secret: str = ""
+    flixbus_openapi_enabled: bool = True
     kiwi_tequila_api_key: str = ""
     brevo_api_key: str = ""
     email_enabled: bool = False
@@ -94,6 +98,8 @@ class Settings(BaseSettings):
             warnings.append("TRAVELPAYOUTS_TOKEN missing; Travelpayouts provider skipped.")
         if self.travelpayouts_token and not self.travelpayouts_marker:
             warnings.append("Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant")
+        if not self.amadeus_client_id or not self.amadeus_client_secret:
+            warnings.append("AMADEUS_CLIENT_ID/SECRET missing; Amadeus provider skipped.")
         return warnings
 
     @property
@@ -109,6 +115,8 @@ SECRET_FIELDS = {
     "travelpayouts_marker",
     "distribusion_api_key",
     "distribusion_partner_id",
+    "amadeus_client_id",
+    "amadeus_client_secret",
     "kiwi_tequila_api_key",
     "brevo_api_key",
 }

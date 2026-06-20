@@ -10,6 +10,7 @@ import yaml
 from sqlalchemy import select
 
 from travel_scrapping.config import Settings
+from travel_scrapping.bus.flixbus_openapi import FlixBusOpenApiProvider
 from travel_scrapping.bus.flixbus_rapidapi import FlixBusRapidApiProvider
 from travel_scrapping.db import ProviderStatusRow, SearchRun, init_db, save_deals, session_scope
 from travel_scrapping.db import set_run_config_snapshot
@@ -20,6 +21,8 @@ from travel_scrapping.search.normalizer import scrub_text
 from travel_scrapping.search.providers.base import FlightProvider
 from travel_scrapping.search.providers.distribusion import DistribusionGroundTransportProvider
 from travel_scrapping.search.providers.playwright_probe import PlaywrightProbeProvider
+from travel_scrapping.search.providers.amadeus import AmadeusProvider
+from travel_scrapping.search.providers.ryanair import RyanairProvider
 from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightDealsProvider
 from travel_scrapping.search.providers.travelpayouts import TravelpayoutsProvider
 from travel_scrapping.search.scoring import sort_deals
@@ -43,6 +46,8 @@ def load_destinations(path: str = "config/destinations.yaml") -> list[Destinatio
 
 def build_providers(settings: Settings, *, include_indicative: bool = False) -> list[FlightProvider]:
     providers: list[FlightProvider] = [SerpApiGoogleFlightDealsProvider(settings)]
+    providers.append(RyanairProvider(settings))
+    providers.append(AmadeusProvider(settings))
     providers.append(TravelpayoutsProvider(settings))
     providers.append(PlaywrightProbeProvider(settings))
     return providers
@@ -207,12 +212,17 @@ async def run_search(
                     row.raw_count = len(candidates)
                     row.normalized_count = len(candidates)
             if "bus" in mode_set:
-                bus_provider = FlixBusRapidApiProvider(settings)
-                status = bus_provider.status()
-                row = provider_status_row(run.id, status)
-                session.add(row)
-                provider_records.append({"name": status.name, "enabled": status.enabled, "role": provider_role(status.name)})
-                if status.enabled and date_pairs:
+                bus_providers_to_run = [
+                    FlixBusOpenApiProvider(settings),
+                    FlixBusRapidApiProvider(settings),
+                ]
+                for bus_provider in bus_providers_to_run:
+                    status = bus_provider.status()
+                    row = provider_status_row(run.id, status)
+                    session.add(row)
+                    provider_records.append({"name": status.name, "enabled": status.enabled, "role": provider_role(status.name)})
+                    if not status.enabled or not date_pairs:
+                        continue
                     outbound, ret, _nights = date_pairs[0]
                     bus_accepted = 0
                     bus_rejected = 0
@@ -241,7 +251,7 @@ async def run_search(
                                 rejected += 1
                                 bus_rejected += 1
                                 bus_reasons.update(rejection_reasons(deal, reasons))
-                    if bus_provider.last_error:
+                    if getattr(bus_provider, "last_error", None):
                         row.ok = False
                         row.error = scrub_text(bus_provider.last_error)
                     row.attempted = bool(getattr(bus_provider, "last_path", None))
@@ -297,8 +307,11 @@ def provider_role(name: str) -> str:
         "serpapi_google_flights_deals": "primary",
         "serpapi": "detail_probe",
         "serpapi_google_flights": "detail_probe",
+        "ryanair": "primary",
+        "amadeus": "primary",
         "travelpayouts": "optional",
         "flixbus": "optional",
+        "flixbus_openapi": "optional",
         "flixbus_rapidapi": "optional",
         "distribusion": "optional",
         "playwright_probe": "detail_probe",

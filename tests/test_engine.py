@@ -163,10 +163,11 @@ async def test_run_search_all_mode_keeps_flight_provider_when_ground_disabled(tm
 
     assert run is not None
     assert run.status == "completed"
-    assert [row.name for row in statuses] == ["fake", "distribusion", "flixbus"]
+    assert [row.name for row in statuses] == ["fake", "distribusion", "flixbus_openapi", "flixbus"]
     assert statuses[0].raw_count == 1
     assert statuses[1].enabled is False
     assert statuses[2].enabled is False
+    assert statuses[3].enabled is False
 
 
 @pytest.mark.asyncio
@@ -194,7 +195,7 @@ async def test_run_search_bus_train_mode_does_not_build_flight_provider(tmp_path
 
     assert run is not None
     assert run.status == "completed"
-    assert [row.name for row in statuses] == ["distribusion", "flixbus"]
+    assert [row.name for row in statuses] == ["distribusion", "flixbus_openapi", "flixbus"]
 
 
 def test_create_search_run_and_latest_empty(tmp_path):
@@ -343,6 +344,21 @@ async def test_run_search_bus_records_last_error_and_rejected_offer(tmp_path, mo
                 )
             ]
 
+    class DisabledBusProvider:
+        name = "flixbus_openapi"
+
+        def __init__(self, settings):
+            self.last_error = None
+            self.last_status_code = None
+            self.last_path = None
+
+        def status(self):
+            return ProviderStatus("flixbus_openapi", enabled=False, warnings=["disabled for test"])
+
+        async def search_roundtrip(self, origin, destination, depart, ret):
+            return []
+
+    monkeypatch.setattr("travel_scrapping.search.engine.FlixBusOpenApiProvider", DisabledBusProvider)
     monkeypatch.setattr("travel_scrapping.search.engine.FlixBusRapidApiProvider", FakeBusProvider)
 
     run_id = await run_search(settings, providers=[], modes="bus")
@@ -358,7 +374,7 @@ async def test_run_search_bus_records_last_error_and_rejected_offer(tmp_path, mo
     assert [(row.name, row.enabled, row.attempted) for row in statuses[:1]] == [
         ("distribusion", False, False)
     ]
-    assert len(statuses) == 2
+    assert len(statuses) == 3
     assert statuses[-1].ok is False
     assert statuses[-1].error == "quota secret-token exceeded"
     assert statuses[-1].attempted is True
