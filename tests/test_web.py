@@ -252,7 +252,7 @@ def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
     assert '<strong class="status-badge pending-blink">pending</strong>' in response.text
     assert "Étape 01 — Configuration chargée" in response.text
     assert "Étape 02 — Recherche lancée" in response.text
-    assert 'class="step-spinner"' in response.text
+    assert "step-spinner" not in response.text
     assert '<span class="step-state pending-blink">pending</span>' in response.text
     assert '<meta http-equiv="refresh" content="5">' in response.text
 

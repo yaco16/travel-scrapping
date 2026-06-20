@@ -4,10 +4,14 @@
 
 Travel Scrapping MVP construit localement :
 
+- Étape 01 - Tranche `018-results-pipeline-no-spinner` archivee dans `docs/tasks/archive/018-results-pipeline-no-spinner.md`.
+- Étape 02 - `/results` affiche le pipeline sans spinner; `pending` reste visible et clignotant, auto-refresh non terminal conserve.
+- Étape 03 - Tests UI gardent les garanties HTMX/onglets sans retour haut, pays pres de la ville, meilleur prix vert et `/search` redirige vers `/`.
+- Étape 04 - Documentation providers: pas de nouvelle API integree maintenant; `Distribusion` est candidat prioritaire futur bus + train Europe; `Transitland/GTFS` sert a decouvrir operateurs/routes/arrets/horaires sans prix/reservation; `OSDM` est un standard rail utile a privilegier via agregateur au depart; provider futur possible `ground_transport_distribusion` desactive par defaut sans credentials.
 - Étape 01 - Tranche `017-ui-results-polish` archivee dans `docs/tasks/archive/017-ui-results-polish.md`.
 - Étape 02 - `/search` redirige vers `/` en `303`; le menu principal garde Dashboard, Résultats, Historique; la home conserve le formulaire de recherche.
 - Étape 03 - La home masque uniquement le warning `Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant`; `/results` conserve le diagnostic Travelpayouts.
-- Étape 04 - `/results` affiche spinner pipeline, `pending` clignotant, auto-refresh non terminal, onglets HTMX Tous/Avion/Bus sans retour haut avec fallback ancre.
+- Étape 04 - `/results` affichait spinner pipeline, `pending` clignotant, auto-refresh non terminal, onglets HTMX Tous/Avion/Bus sans retour haut avec fallback ancre.
 - Étape 05 - Le meilleur prix est vert, les pays destinations s'affichent près des villes via `destination_country` ou fallback aeroport, codes connus traduits en francais.
 - Étape 06 - Documentation providers ajoute `Distribusion` comme candidat futur bus/train Europe; `Transitland/GTFS` et `OSDM` restent documentation seulement.
 - Étape 01 - Tranche `016-run-snapshot-results-ui-providers` archivee dans `docs/tasks/archive/016-run-snapshot-results-ui-providers.md`.

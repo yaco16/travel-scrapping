@@ -38,7 +38,7 @@
   </div>
   <ol class="status-list">
   {% for step in processing_steps %}
-    <li><span class="step-spinner" aria-hidden="true"></span><span>{{ step }}</span>{% if run and run.status == "pending" %}<span class="step-state pending-blink">pending</span>{% endif %}</li>
+    <li><span>{{ step }}</span>{% if run and run.status == "pending" %}<span class="step-state pending-blink">pending</span>{% endif %}</li>
   {% endfor %}
   </ol>
 </section>

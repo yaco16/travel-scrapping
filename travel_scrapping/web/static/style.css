@@ -223,22 +223,9 @@ th, td { border-bottom: 1px solid var(--line); padding: .6rem; text-align: left;
 th { color: var(--muted); font-size: .86rem; }
 .status-list { display: grid; gap: .45rem; padding-left: 0; margin-bottom: 0; list-style: none; }
 .status-list li { display: flex; align-items: center; gap: .55rem; }
-.step-spinner {
-  width: .9rem;
-  height: .9rem;
-  border: 2px solid #cbd5e1;
-  border-top-color: var(--primary);
-  border-radius: 999px;
-  animation: spin .9s linear infinite;
-  flex: 0 0 auto;
-}
 .step-state { color: var(--muted); font-size: .78rem; font-weight: 700; text-transform: uppercase; }
 .pending-blink { animation: blink 1s ease-in-out infinite; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .8rem; }
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 @keyframes blink {
   0%, 100% { opacity: 1; }

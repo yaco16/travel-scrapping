@@ -46,6 +46,8 @@ Utilité projet: intéressant si accès officiel obtenu; non prioritaire sans pa
 
 ## Bus et train Europe
 
+Aucune nouvelle API bus/train n'est intégrée maintenant.
+
 ### Distribusion
 
 Recommandation: meilleur candidat futur pour bus + train Europe.
@@ -54,7 +56,7 @@ Intérêt: agrégateur transport terrestre, bus/train, nombreux transporteurs, s
 
 Limite: accès commercial/sandbox à obtenir avant toute intégration fiable.
 
-Prochaine étape: demander un accès demo/sandbox, puis créer un provider `ground_transport_distribusion` désactivé par défaut tant que les credentials sont absents.
+Prochaine étape: demander un accès demo/sandbox, puis créer un provider futur possible `ground_transport_distribusion` désactivé par défaut tant que les credentials sont absents.
 
 ### Transitland/GTFS
 
@@ -62,7 +64,7 @@ Utile pour découvrir opérateurs, arrêts, lignes et horaires. Pas adapté aux 
 
 ### OSDM
 
-Utile pour le rail, surtout comme standard d'échange. Pour ce MVP, départ plus réaliste via agrégateur avant intégration directe.
+Utile pour le rail, surtout comme standard d'échange. Pour ce MVP, à privilégier via agrégateur au départ avant intégration directe.
 
 ## Décision
 
