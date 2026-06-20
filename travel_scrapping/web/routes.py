@@ -29,6 +29,40 @@ from travel_scrapping.search.engine import create_search_run, run_search_sync
 from travel_scrapping.airports import resolve_airport
 from travel_scrapping.web import presentation
 
+COUNTRY_LABELS = {
+    "AT": "Autriche",
+    "BE": "Belgique",
+    "CH": "Suisse",
+    "CZ": "Tchéquie",
+    "DE": "Allemagne",
+    "DK": "Danemark",
+    "ES": "Espagne",
+    "FR": "France",
+    "GB": "Royaume-Uni",
+    "GR": "Grèce",
+    "HU": "Hongrie",
+    "IE": "Irlande",
+    "IT": "Italie",
+    "MA": "Maroc",
+    "MT": "Malte",
+    "NL": "Pays-Bas",
+    "NO": "Norvège",
+    "PL": "Pologne",
+    "PT": "Portugal",
+    "SE": "Suède",
+    "SK": "Slovaquie",
+    "TR": "Turquie",
+    "UK": "Royaume-Uni",
+}
+
+
+def country_display(value: str | None) -> str:
+    if not value:
+        return ""
+    label = str(value).strip()
+    return COUNTRY_LABELS.get(label.upper(), label)
+
+
 templates = Jinja2Templates(directory="travel_scrapping/web/templates")
 templates.env.filters["destination_display"] = presentation.destination_display
 templates.env.filters["short_date"] = presentation.short_date
@@ -41,6 +75,7 @@ templates.env.filters["duration_display"] = presentation.duration_display
 templates.env.filters["provider_status_display"] = presentation.provider_status_display
 templates.env.filters["date_time"] = presentation.date_time
 templates.env.filters["yes_no"] = presentation.yes_no
+templates.env.filters["country_display"] = country_display
 router = APIRouter()
 TERMINAL_RUN_STATUSES = {"completed", "failed"}
 
@@ -169,9 +204,10 @@ def latest_display_deals(
         ),
     )
     for deal in deals:
-        deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
-            deal.destination_airport, settings, session
-        ).info.display_name
+        airport = resolve_airport(deal.destination_airport, settings, session)
+        deal.destination_display_name = airport.info.display_name  # type: ignore[attr-defined]
+        if not deal.destination_country and airport.info.country:
+            deal.destination_country = airport.info.country
         deal.provider_status = statuses.get(deal.provider or deal.source) or statuses.get(deal.source)  # type: ignore[attr-defined]
     return run, deals, statuses
 
@@ -371,20 +407,8 @@ def home(request: Request):
 
 
 @router.get("/search", response_class=HTMLResponse)
-def search_form(request: Request):
-    settings = get_settings()
-    form_settings = settings.model_copy(
-        update={
-            "origin_airport": "NCE",
-            "search_start_date": date(2026, 7, 1),
-            "search_end_date": date(2026, 8, 31),
-            "min_nights": 1,
-            "max_nights": 7,
-            "max_roundtrip_price_eur": 150,
-            "max_stops": 1,
-        }
-    )
-    return templates.TemplateResponse(request, "search.html", {"settings": safe_settings_dict(form_settings)})
+def search_form():
+    return RedirectResponse("/", status_code=303)
 
 
 def run_search_background(search_settings, *, run_id: int, modes: str, depart_from: date | None) -> None:
