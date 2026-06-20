@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 from travel_scrapping.web.presentation import (
     airlines_display,
     booking_display,
+    date_time,
     destination_display,
     price_display,
     short_date,
@@ -29,6 +30,15 @@ def test_short_date_format():
     assert short_date(None) == "Non disponible"
     assert short_date("") == "Non disponible"
     assert short_date("invalid") == "Non disponible"
+
+
+def test_date_time_format_handles_missing_datetime_and_iso_values():
+    assert date_time(None) == "Non disponible"
+    assert date_time(datetime(2026, 6, 20, 9, 56)) == "20/06/26 09:56"
+    assert date_time(datetime(2026, 6, 20, 9, 56, tzinfo=timezone.utc)) == "20/06/26 09:56"
+    assert date_time("2026-06-20T09:56:00+00:00") == "20/06/26 09:56"
+    assert date_time("2026-06-20T09:56:00Z") == "20/06/26 09:56"
+    assert date_time("invalid") == "Non disponible"
 
 
 def test_price_display_without_currency_or_decimals():

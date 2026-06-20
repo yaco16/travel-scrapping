@@ -4,6 +4,10 @@
 
 Travel Scrapping MVP construit localement :
 
+- Étape 01 - Correction Jinja `/history` archivee dans `docs/tasks/archive/014-history-date-time-jinja.md`.
+- Étape 02 - Cause couverte: `history.html` utilise `run.started_at|date_time`; regression possible si l'environnement Jinja ne declare pas `date_time`.
+- Étape 03 - Tests de non-regression ajoutes: compilation de tous les templates via loader Jinja reel, filtres attendus `price_display`/`date_time`, rendu reel `/history` avec Date `JJ/MM/AA HH:mm`.
+- Étape 04 - Smoke `/history` reel valide: page complete HTTP 200, colonne Date et date `20/06/26 09:56`.
 - Étape 01 - Archives numerotees chronologiquement dans `docs/tasks/archive/001-...` a `013-...`.
 - Étape 02 - Historique web enrichi avec Date de lancement du run via `SearchRun.started_at`.
 - Étape 03 - Diagnostics fournisseurs visibles par run: actif, cle, appel, HTTP/erreur, brut, normalise, accepte, rejete, raison principale.

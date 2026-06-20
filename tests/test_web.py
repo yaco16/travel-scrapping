@@ -229,8 +229,9 @@ def test_history_shows_run_start_date_between_id_and_status(tmp_path, monkeypatc
             SearchRun(
                 started_at=datetime(2026, 6, 20, 9, 56),
                 status="completed",
-                accepted_count=0,
-                rejected_count=0,
+                accepted_count=2,
+                rejected_count=3,
+                cheapest_price_eur=88.9,
             )
         )
 
@@ -238,8 +239,14 @@ def test_history_shows_run_start_date_between_id_and_status(tmp_path, monkeypatc
     response = client.get("/history")
 
     assert response.status_code == 200
-    assert "<th>ID</th><th>Date</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th>" in response.text
-    assert "<td>1</td><td>20/06/26 09:56</td><td>completed</td>" in response.text
+    header = "<th>ID</th><th>Date</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th>"
+    row = (
+        "<td>1</td><td>20/06/26 09:56</td><td>completed</td>"
+        "<td>2</td><td>3</td><td>88,90 €</td>"
+    )
+    assert header in response.text
+    assert row in response.text
+    assert "None" not in response.text
 
 
 def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
