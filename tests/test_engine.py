@@ -93,7 +93,7 @@ class ErrorPayloadProvider(FlightProvider):
         self.last_status_code = 200
         self.last_raw_count = 0
         self.last_normalized_count = 0
-        self.last_public_params = {"engine": "google_flights_deals", "fallback_attempts": [{"error": "bad *** key"}]}
+        self.last_public_params = {"engine": "google_flights_deals", "error": "bad *** key"}
         self.last_destination_examples = []
 
     def status(self):
@@ -247,6 +247,7 @@ async def test_run_search_records_disabled_errors_and_rejections(tmp_path):
     assert run.status == "completed"
     assert run.accepted_count == 0
     assert run.rejected_count == 2
+    assert session.query(PriceObservation).count() == 0
     assert [(row.name, row.enabled, row.ok, row.attempted, row.accepted_count, row.rejected_count) for row in statuses] == [
         ("disabled", False, True, False, 0, 0),
         ("raising", True, False, True, 0, 1),

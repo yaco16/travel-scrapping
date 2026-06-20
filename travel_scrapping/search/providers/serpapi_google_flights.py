@@ -144,81 +144,47 @@ class SerpApiGoogleFlightDealsProvider(FlightProvider):
             currency=self.settings.default_currency,
             adults=self.settings.adults,
         )
-        attempts = serpapi_deals_attempts(primary_params)
-        fallback_attempts: list[dict[str, Any]] = []
-        winning_strategy: str | None = None
-        winning_payload: dict[str, Any] | None = None
-        winning_params: dict[str, Any] = primary_params
-        winning_parsed: list[DealCandidate] = []
         self.last_ok = True
         self.last_error = None
         self.last_attempted = True
         async with httpx.AsyncClient(timeout=45) as client:
-            for strategy, params in attempts:
-                response = await client.get(SERPAPI_URL, params=params)
-                self.last_status_code = response.status_code
-                response.raise_for_status()
-                payload = response.json()
-                raw_count = count_deals_items(payload)
-                parsed = parse_google_flight_deals_payload(payload, origin=self.settings.origin_airport)
-                normalized_count = len(parsed)
-                payload_diag = serpapi_payload_diagnostic(payload)
-                attempt = {
-                    "strategy": strategy,
-                    "params": public_params(params),
-                    "http_status": response.status_code,
-                    "raw_count": raw_count,
-                    "normalized_count": normalized_count,
-                    **payload_diag,
-                }
-                if payload_diag.get("error"):
-                    self.last_ok = False
-                    self.last_error = scrub_text(str(payload_diag["error"]))[:500]
-                    fallback_attempts.append(attempt)
-                    winning_strategy = strategy
-                    winning_payload = payload
-                    winning_params = params
-                    winning_parsed = []
-                    break
-                fallback_attempts.append(attempt)
-                if raw_count > 0:
-                    winning_strategy = strategy
-                    winning_payload = payload
-                    winning_params = params
-                    winning_parsed = parsed
-                    break
-        if winning_payload is None:
-            winning_payload = payload if "payload" in locals() else {}
-            winning_strategy = None
-            winning_params = params if "params" in locals() else attempts[0][1]
-            winning_parsed = []
-        assert winning_payload is not None
-        payload_for_debug: dict[str, Any] = winning_payload
+            response = await client.get(SERPAPI_URL, params=primary_params)
+            self.last_status_code = response.status_code
+            response.raise_for_status()
+            payload_for_debug = response.json()
+        raw_count = count_deals_items(payload_for_debug)
+        parsed = parse_google_flight_deals_payload(payload_for_debug, origin=self.settings.origin_airport)
+        payload_diag = serpapi_payload_diagnostic(payload_for_debug)
+        if payload_diag.get("error"):
+            self.last_ok = False
+            self.last_error = scrub_text(str(payload_diag["error"]))[:500]
+            parsed = []
         self.last_raw_count = count_deals_items(payload_for_debug)
         self.last_debug_path = save_debug_json(
             {
-                "params": public_params(winning_params),
-                "winning_strategy": winning_strategy,
-                "fallback_attempts": fallback_attempts,
+                "params": public_params(primary_params),
+                "http_status": self.last_status_code,
+                "raw_count": raw_count,
+                "normalized_count": len(parsed),
                 "payload_diagnostic": serpapi_payload_diagnostic(payload_for_debug),
                 "payload": payload_for_debug,
             },
             prefix="serpapi-google-flight-deals",
         )
-        self.last_normalized_count = len(winning_parsed)
-        self.last_destination_examples = destination_examples(winning_parsed)
+        self.last_normalized_count = len(parsed)
+        self.last_destination_examples = destination_examples(parsed)
         diagnostic = None
         if self.last_status_code == 200 and self.last_ok and self.last_raw_count == 0:
-            diagnostic = "SerpApi appelé, HTTP 200, payload sans deal exploitable."
+            diagnostic = "SerpApi appelé, HTTP 200, payload sans clé deals exploitable."
         self.last_public_params = {
-            **public_params(winning_params),
-            "winning_strategy": winning_strategy,
-            "fallback_used": winning_strategy != "primary_trip_length_1_7",
-            "fallback_attempts": fallback_attempts,
+            **public_params(primary_params),
+            "http_status": self.last_status_code,
+            "raw_count": raw_count,
+            "normalized_count": len(parsed),
             "payload_diagnostic": serpapi_payload_diagnostic(payload_for_debug),
             "diagnostic": diagnostic,
         }
-        return winning_parsed[:limit]
+        return parsed[:limit]
 
 
 def serpapi_base_params(
@@ -284,25 +250,6 @@ def serpapi_deals_params(
 
 def public_params(params: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in params.items() if key != "api_key"}
-
-
-def serpapi_deals_attempts(primary_params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    primary = dict(primary_params)
-    travel_duration = dict(primary_params)
-    travel_duration.pop("trip_length", None)
-    travel_duration["travel_duration"] = "1"
-    any_duration = dict(primary_params)
-    any_duration.pop("trip_length", None)
-    any_duration.pop("travel_duration", None)
-    historical = dict(primary_params)
-    historical["trip_length"] = "3,5"
-    historical.pop("travel_duration", None)
-    return [
-        ("primary_trip_length_1_7", primary),
-        ("fallback_travel_duration_1_week", travel_duration),
-        ("fallback_any_duration", any_duration),
-        ("fallback_trip_length_3_5", historical),
-    ]
 
 
 def serpapi_payload_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
@@ -475,22 +422,21 @@ def _destination_code(item: dict[str, Any]) -> str | None:
 
 def _deal_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for key in ("destinations", "flight_deals", "deals", "best_flights", "other_flights", "flights"):
-        value = payload.get(key)
-        if not isinstance(value, list):
+    value = payload.get("deals")
+    if not isinstance(value, list):
+        return items
+    for row in value:
+        if not isinstance(row, dict):
             continue
-        for row in value:
-            if not isinstance(row, dict):
-                continue
-            nested = row.get("flights") or row.get("deals") or row.get("offers")
-            if isinstance(nested, list):
-                for nested_row in nested:
-                    if isinstance(nested_row, dict):
-                        merged = dict(row)
-                        merged.update(nested_row)
-                        items.append(merged)
-            else:
-                items.append(row)
+        nested = row.get("flights") or row.get("offers")
+        if isinstance(nested, list):
+            for nested_row in nested:
+                if isinstance(nested_row, dict):
+                    merged = dict(row)
+                    merged.update(nested_row)
+                    items.append(merged)
+        else:
+            items.append(row)
     return items
 
 

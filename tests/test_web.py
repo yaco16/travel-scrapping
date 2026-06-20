@@ -937,7 +937,7 @@ def test_results_show_google_flight_deals_comparison_and_destinations(tmp_path, 
     assert "2026-07-01,2026-08-31" in response.text
 
 
-def test_results_show_google_flight_deals_fallback_strategy(tmp_path, monkeypatch):
+def test_results_show_google_flight_deals_strict_payload_diagnostic(tmp_path, monkeypatch):
     get_settings.cache_clear()
     db_url = f"sqlite:///{tmp_path}/web.db"
     monkeypatch.setenv("DATABASE_URL", db_url)
@@ -964,22 +964,9 @@ def test_results_show_google_flight_deals_fallback_strategy(tmp_path, monkeypatc
                         "engine": "google_flights_deals",
                         "departure_id": "NCE",
                         "outbound_date": "2026-07-01,2026-08-31",
-                        "winning_strategy": "fallback_travel_duration_1_week",
-                        "fallback_used": True,
-                        "fallback_attempts": [
-                            {
-                                "strategy": "primary_trip_length_1_7",
-                                "http_status": 200,
-                                "raw_count": 0,
-                                "normalized_count": 0,
-                            },
-                            {
-                                "strategy": "fallback_travel_duration_1_week",
-                                "http_status": 200,
-                                "raw_count": 1,
-                                "normalized_count": 1,
-                            },
-                        ],
+                        "trip_length": "1,7",
+                        "max_price": "150",
+                        "stops": "2",
                         "payload_diagnostic": {
                             "search_metadata_status": "Success",
                             "top_level_keys": ["search_metadata", "deals"],
@@ -994,10 +981,9 @@ def test_results_show_google_flight_deals_fallback_strategy(tmp_path, monkeypatc
     response = client.get("/results")
 
     assert response.status_code == 200
-    assert "Stratégie gagnante : fallback_travel_duration_1_week · fallback utilisé=oui" in response.text
-    assert "primary_trip_length_1_7" in response.text
-    assert "fallback_travel_duration_1_week" in response.text
-    assert "<td>1</td>" in response.text
+    assert "Payload : status=Success · clés=search_metadata, deals" in response.text
+    assert "<td>trip_length</td><td>1,7</td>" in response.text
+    assert "<td>max_price</td><td>150</td>" in response.text
     assert "api_key" not in response.text
 
 

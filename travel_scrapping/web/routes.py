@@ -167,7 +167,6 @@ def google_flight_deals_context(statuses: dict[str, ProviderStatusRow]) -> dict[
         except json.JSONDecodeError:
             examples = []
     endpoint = str(params.get("engine") or (status.name if status else "non disponible"))
-    fallback_attempts = params.get("fallback_attempts") if isinstance(params.get("fallback_attempts"), list) else []
     payload_diagnostic = params.get("payload_diagnostic") if isinstance(params.get("payload_diagnostic"), dict) else {}
     return {
         "endpoint": endpoint,
@@ -181,9 +180,6 @@ def google_flight_deals_context(statuses: dict[str, ProviderStatusRow]) -> dict[
         "attempted": bool(status.attempted) if status else False,
         "http_status": status.http_status if status else None,
         "params": params,
-        "fallback_used": bool(params.get("fallback_used")),
-        "winning_strategy": params.get("winning_strategy"),
-        "fallback_attempts": fallback_attempts,
         "payload_diagnostic": payload_diagnostic,
         "diagnostic": params.get("diagnostic"),
         "destination_examples": examples,

@@ -56,6 +56,8 @@ def deal_payload(code="SVQ", city="Séville", price=50):
                 "price": price,
                 "outbound_date": "2026-07-16",
                 "return_date": "2026-07-23",
+                "airline": "easyJet",
+                "google_flights_link": f"https://example.test/{code.lower()}",
             }
         ],
         "search_metadata": {"status": "Success"},
@@ -150,7 +152,7 @@ def test_parse_google_flight_deals_fixture():
     deals = parse_google_flight_deals_payload(
         {
             "currency": "EUR",
-            "destinations": [
+            "deals": [
                 {
                     "destination_airport": {"id": "SVQ"},
                     "destination_city": "Séville",
@@ -201,19 +203,21 @@ def test_parse_google_flight_deals_fixture():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_google_flight_deals_provider_search_uses_flexible_anywhere_params(tmp_path, monkeypatch):
+async def test_google_flight_deals_provider_search_uses_strict_deals_params(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     route = respx.get("https://serpapi.com/search.json").mock(
         return_value=Response(
             200,
             json={
-                "destinations": [
+                "deals": [
                     {
                         "destination_airport": "SVQ",
                         "destination_city": "Séville",
                         "price": 50,
                         "outbound_date": "2026-07-16",
                         "return_date": "2026-07-23",
+                        "airline": "easyJet",
+                        "google_flights_link": "https://example.test/svq",
                     }
                 ]
             },
@@ -236,7 +240,7 @@ async def test_google_flight_deals_provider_search_uses_flexible_anywhere_params
 
 
 @pytest.mark.asyncio
-async def test_google_flight_deals_provider_primary_success_skips_fallback(tmp_path, monkeypatch):
+async def test_google_flight_deals_provider_single_request_no_fallback(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = FakeAsyncClient([deal_payload()])
     monkeypatch.setattr(
@@ -249,19 +253,16 @@ async def test_google_flight_deals_provider_primary_success_skips_fallback(tmp_p
 
     assert len(client.calls) == 1
     assert deals[0].destination_airport == "SVQ"
-    assert provider.last_public_params["winning_strategy"] == "primary_trip_length_1_7"
-    assert provider.last_public_params["fallback_used"] is False
     assert "api_key" not in provider.last_public_params
-    assert all("api_key" not in attempt["params"] for attempt in provider.last_public_params["fallback_attempts"])
+    assert "fallback_attempts" not in provider.last_public_params
+    assert "return_date" not in provider.last_public_params
+    assert provider.last_public_params["trip_length"] == "1,7"
 
 
 @pytest.mark.asyncio
-async def test_google_flight_deals_provider_fallback_travel_duration(tmp_path, monkeypatch):
+async def test_google_flight_deals_provider_does_not_fallback_when_deals_missing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    client = FakeAsyncClient([
-        {"search_metadata": {"status": "Success"}, "departure_informations": []},
-        deal_payload("MLA", "Malte", 71),
-    ])
+    client = FakeAsyncClient([{"search_metadata": {"status": "Success"}, "departure_informations": []}])
     monkeypatch.setattr(
         "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
         lambda timeout: client,
@@ -270,41 +271,16 @@ async def test_google_flight_deals_provider_fallback_travel_duration(tmp_path, m
 
     deals = await provider.search([], [], limit=10)
 
-    assert len(client.calls) == 2
-    assert deals[0].destination_airport == "MLA"
-    assert "trip_length" not in client.calls[1]["params"]
-    assert client.calls[1]["params"]["travel_duration"] == "1"
-    assert provider.last_public_params["winning_strategy"] == "fallback_travel_duration_1_week"
-    assert provider.last_public_params["fallback_used"] is True
+    assert len(client.calls) == 1
+    assert deals == []
+    assert provider.last_raw_count == 0
+    assert provider.last_public_params["diagnostic"] == "SerpApi appelé, HTTP 200, payload sans clé deals exploitable."
 
 
 @pytest.mark.asyncio
-async def test_google_flight_deals_provider_fallback_any_duration(tmp_path, monkeypatch):
+async def test_google_flight_deals_provider_empty_payload_diagnostic(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    client = FakeAsyncClient([
-        {"search_metadata": {"status": "Success"}},
-        {"search_metadata": {"status": "Success"}},
-        deal_payload("FCO", "Rome", 50),
-    ])
-    monkeypatch.setattr(
-        "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
-        lambda timeout: client,
-    )
-    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
-
-    deals = await provider.search([], [], limit=10)
-
-    assert len(client.calls) == 3
-    assert deals[0].destination_airport == "FCO"
-    assert "trip_length" not in client.calls[2]["params"]
-    assert "travel_duration" not in client.calls[2]["params"]
-    assert provider.last_public_params["winning_strategy"] == "fallback_any_duration"
-
-
-@pytest.mark.asyncio
-async def test_google_flight_deals_provider_zero_everywhere_diagnostic(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    client = FakeAsyncClient([{"search_metadata": {"status": "Success"}} for _ in range(4)])
+    client = FakeAsyncClient([{"search_metadata": {"status": "Success"}}])
     monkeypatch.setattr(
         "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
         lambda timeout: client,
@@ -314,9 +290,9 @@ async def test_google_flight_deals_provider_zero_everywhere_diagnostic(tmp_path,
     deals = await provider.search([], [], limit=10)
 
     assert deals == []
-    assert len(client.calls) == 4
+    assert len(client.calls) == 1
     assert provider.last_raw_count == 0
-    assert provider.last_public_params["diagnostic"] == "SerpApi appelé, HTTP 200, payload sans deal exploitable."
+    assert provider.last_public_params["diagnostic"] == "SerpApi appelé, HTTP 200, payload sans clé deals exploitable."
     assert provider.last_public_params["payload_diagnostic"]["top_level_keys"] == ["search_metadata"]
 
 
@@ -339,7 +315,7 @@ async def test_google_flight_deals_provider_http_200_error_sets_error_and_scrubs
     assert provider.last_error == "bad *** secret value"
     dumped = str(provider.last_public_params)
     assert "api_key" not in dumped
-    assert provider.last_public_params["fallback_attempts"][0]["error"] == "bad *** secret value"
+    assert provider.last_public_params["payload_diagnostic"]["error"] == "bad *** secret value"
 
 
 @pytest.mark.asyncio
