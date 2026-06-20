@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from travel_scrapping.config import Settings
+from travel_scrapping.db import PriceObservation, SearchRun, init_db, session_scope
 from travel_scrapping.schemas import DealCandidate
 from travel_scrapping.search.engine import load_destinations, run_search
 from travel_scrapping.search.providers.base import FlightProvider, ProviderStatus
@@ -45,3 +46,8 @@ async def test_run_search_persists(tmp_path):
     )
     run_id = await run_search(settings, providers=[FakeProvider(settings)])
     assert run_id == 1
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        run = session.get(SearchRun, run_id)
+        assert run is not None
+        assert run.accepted_count == session.query(PriceObservation).count()

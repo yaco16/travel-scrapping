@@ -8,7 +8,14 @@ from sqlalchemy import func, select
 
 from travel_scrapping.airports import collect_observation_iata_codes, resolve_airport
 from travel_scrapping.config import get_settings, safe_settings_dict
-from travel_scrapping.db import PriceObservation, SearchRun, init_db, session_scope
+from travel_scrapping.db import (
+    PriceObservation,
+    SearchRun,
+    init_db,
+    invalid_price_observation_clause,
+    session_scope,
+    valid_price_observation_clause,
+)
 from travel_scrapping.email.brevo import send_deals_email
 from travel_scrapping.search.engine import latest_deals, run_search
 
@@ -53,10 +60,20 @@ def sqlite_diagnostics() -> None:
     settings = get_settings()
     factory = init_db(settings)
     with session_scope(factory) as session:
+        valid_clause = valid_price_observation_clause()
+        invalid_clause = invalid_price_observation_clause()
+        valid_count = session.scalar(select(func.count(PriceObservation.id)).where(valid_clause)) or 0
+        invalid_count = session.scalar(select(func.count(PriceObservation.id)).where(invalid_clause)) or 0
         typer.echo(f"campaigns={session.query(SearchRun).count()}")
         typer.echo(f"observations={session.query(PriceObservation).count()}")
-        typer.echo("latest_observations:")
-        latest = session.scalars(select(PriceObservation).order_by(PriceObservation.id.desc()).limit(20))
+        typer.echo(f"observations_valides={valid_count}")
+        typer.echo(f"observations_invalides={invalid_count}")
+        if invalid_count:
+            typer.echo(f"{invalid_count} observations invalides historiques détectées")
+        typer.echo("latest_valid_observations:")
+        latest = session.scalars(
+            select(PriceObservation).where(valid_clause).order_by(PriceObservation.id.desc()).limit(20)
+        )
         for row in latest:
             typer.echo(
                 f"{row.id} run={row.run_id} {row.origin_iata}-{row.destination_iata} "
@@ -76,6 +93,7 @@ def sqlite_diagnostics() -> None:
                 func.min(PriceObservation.price).label("min_price"),
                 func.max(PriceObservation.price).label("max_price"),
             )
+            .where(valid_clause)
             .group_by(
                 PriceObservation.origin_iata,
                 PriceObservation.destination_iata,
@@ -93,6 +111,24 @@ def sqlite_diagnostics() -> None:
                 f"nights={row.nights} source={row.source} count={row.count} "
                 f"min={row.min_price} max={row.max_price}"
             )
+
+
+@app.command("sqlite-clean-invalid")
+def sqlite_clean_invalid(dry_run: bool = False, execute: bool = False) -> None:
+    if dry_run == execute:
+        raise typer.BadParameter("Choisir exactement --dry-run ou --execute.")
+    settings = get_settings()
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        invalid_clause = invalid_price_observation_clause()
+        count = session.scalar(select(func.count(PriceObservation.id)).where(invalid_clause)) or 0
+        if dry_run:
+            typer.echo(f"{count} observations invalides seraient supprimées")
+            typer.echo("campaigns conservées")
+            return
+        deleted = session.query(PriceObservation).filter(invalid_clause).delete(synchronize_session=False)
+        typer.echo(f"{deleted} observations invalides supprimées")
+        typer.echo("campaigns conservées")
 
 
 @app.command("airports-refresh")

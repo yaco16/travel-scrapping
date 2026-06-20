@@ -91,11 +91,11 @@ async def run_search(settings: Settings, *, providers: list[FlightProvider] | No
                 else:
                     rejected += 1
         sorted_deals = sort_deals(all_deals)[: settings.top_results_limit]
-        save_deals(session, run, sorted_deals)
+        inserted = save_deals(session, run, sorted_deals)
         run.status = "completed"
         run.completed_at = datetime.now(timezone.utc)
-        run.accepted_count = len(sorted_deals)
-        run.rejected_count = rejected
+        run.accepted_count = inserted
+        run.rejected_count = rejected + (len(sorted_deals) - inserted)
         run.cheapest_price_eur = sorted_deals[0].total_price_eur if sorted_deals else None
         return run.id
 

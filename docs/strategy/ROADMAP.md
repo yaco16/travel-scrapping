@@ -16,6 +16,8 @@ Travel Scrapping MVP construit localement :
 - Historique `price_observations` append-only enrichi, diagnostic CLI et `/sqlite`.
 - Enrichissement aeroport optionnel via API Ninjas Airports, cache SQLite `airport_metadata`, fallback villes francaises sans cle API.
 - CLI `airports-refresh` pour backfill/refresh des metadonnees aeroport.
+- Insertion SQLite des observations prix protegee: `run_id` obligatoire, champs normalises indispensables non nuls, diagnostics/variations ignorent les lignes historiques invalides.
+- CLI `sqlite-clean-invalid --dry-run|--execute` disponible pour nettoyer les anciennes observations corrompues de developpement local sans supprimer les campagnes.
 - CLI, README, `.env.example`, tests et coverage.
 
 ## Limite
@@ -24,4 +26,4 @@ Aucun sweep live large lancé. Playwright reste squelette sûr désactivé par d
 
 ## Prochaine tranche
 
-Configurer `.env`, lancer `airports-refresh --iata VCE` si cle API Ninjas disponible, puis lancer un smoke SerpAPI minimal sur une destination/date et ajuster parsing payload reel.
+Nettoyer les 18 observations invalides historiques locales avec `sqlite-clean-invalid --dry-run`, puis `--execute` si le comptage est attendu. Ensuite relancer un smoke provider et verifier `sqlite-diagnostics`.

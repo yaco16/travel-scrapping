@@ -1,6 +1,5 @@
 # TODO
 
-- Configurer `.env` avec clés providers réelles si smoke live attendu.
-- Optionnel : renseigner `API_NINJAS_API_KEY`, puis lancer `python -m travel_scrapping.cli airports-refresh --iata VCE`.
-- Lancer un smoke SerpAPI minimal avec clé réelle.
-- Ajuster normalisation SerpAPI selon payload live observé.
+- Lancer `.venv/bin/python -m travel_scrapping.cli sqlite-clean-invalid --dry-run`.
+- Si le compteur attendu est confirme, lancer `.venv/bin/python -m travel_scrapping.cli sqlite-clean-invalid --execute`.
+- Relancer un smoke provider, puis verifier `.venv/bin/python -m travel_scrapping.cli sqlite-diagnostics`.

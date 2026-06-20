@@ -56,8 +56,10 @@ def test_sqlite_diagnostic_handles_null_dates(tmp_path, monkeypatch):
     client = TestClient(create_app())
     response = client.get("/sqlite")
     assert response.status_code == 200
-    assert "Dates non disponibles" in response.text
-    assert "Non disponible" in response.text
+    assert "Observations valides: 0" in response.text
+    assert "Observations invalides: 1" in response.text
+    assert "1 observations invalides historiques détectées" in response.text
+    assert "None-None" not in response.text
 
 
 def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
@@ -119,12 +121,27 @@ def test_results_show_only_valid_deals_from_latest_run(tmp_path, monkeypatch):
                 ),
             ]
         )
+        session.add(
+            PriceObservation(
+                route_key="missing",
+                run_id=latest_run.id,
+                origin_iata=None,
+                destination_iata=None,
+                departure_date=None,
+                return_date=None,
+                nights=None,
+                price=None,
+                price_eur=0,
+                source="legacy",
+            )
+        )
     client = TestClient(create_app())
     response = client.get("/results")
     assert response.status_code == 200
     assert "Venise" in response.text
     assert "Bratislava" not in response.text
     assert "Barcelone" not in response.text
+    assert "legacy" not in response.text
     assert ">55<" in response.text
 
 

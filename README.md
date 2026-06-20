@@ -32,6 +32,8 @@ Open `http://127.0.0.1:8000`.
 .venv/bin/python -m travel_scrapping.cli airports-refresh
 .venv/bin/python -m travel_scrapping.cli airports-refresh --iata VCE
 .venv/bin/python -m travel_scrapping.cli sqlite-diagnostics
+.venv/bin/python -m travel_scrapping.cli sqlite-clean-invalid --dry-run
+.venv/bin/python -m travel_scrapping.cli sqlite-clean-invalid --execute
 .venv/bin/python -m travel_scrapping.cli search --send-email
 ```
 
@@ -46,6 +48,8 @@ sqlite3 data/travel_scrapping.db "select origin_iata, destination_iata, departur
 ```
 
 Dashboard: `http://127.0.0.1:8000/sqlite`.
+
+`sqlite-clean-invalid` sert uniquement au nettoyage des anciennes lignes corrompues de développement local dans `price_observations`. `--dry-run` affiche le nombre de lignes supprimables. `--execute` supprime seulement les observations dont un champ indispensable est nul. Les campagnes ne sont jamais supprimées.
 
 Airport metadata is cached in SQLite table `airport_metadata` with IATA, city, French display city, airport name, country, timezone, coordinates, source, fetch timestamp and raw payload. `airports-refresh --force` bypasses cache and refreshes from API when `API_NINJAS_API_KEY` exists.
 

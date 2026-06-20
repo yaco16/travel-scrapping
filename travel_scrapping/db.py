@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import zlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, and_, create_engine, or_, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
+from sqlalchemy.sql.elements import ColumnElement
 
 from travel_scrapping.config import Settings
 from travel_scrapping.schemas import DealCandidate
@@ -87,6 +88,46 @@ class PriceObservation(Base):
     raw_payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     price_eur: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(64))
+
+
+def valid_price_observation_clause() -> ColumnElement[bool]:
+    return and_(
+        PriceObservation.run_id.is_not(None),
+        PriceObservation.origin_iata.is_not(None),
+        PriceObservation.destination_iata.is_not(None),
+        PriceObservation.departure_date.is_not(None),
+        PriceObservation.return_date.is_not(None),
+        PriceObservation.nights.is_not(None),
+        PriceObservation.price.is_not(None),
+        PriceObservation.currency.is_not(None),
+    )
+
+
+def invalid_price_observation_clause() -> ColumnElement[bool]:
+    return or_(
+        PriceObservation.run_id.is_(None),
+        PriceObservation.origin_iata.is_(None),
+        PriceObservation.destination_iata.is_(None),
+        PriceObservation.departure_date.is_(None),
+        PriceObservation.return_date.is_(None),
+        PriceObservation.nights.is_(None),
+        PriceObservation.price.is_(None),
+        PriceObservation.currency.is_(None),
+    )
+
+
+def missing_observation_fields(run_id: int | None, deal: DealCandidate) -> list[str]:
+    fields = {
+        "run_id": run_id,
+        "origin_iata": deal.origin_airport,
+        "destination_iata": deal.destination_airport,
+        "departure_date": deal.outbound_date,
+        "return_date": deal.return_date,
+        "nights": deal.nights,
+        "price": deal.total_price,
+        "currency": deal.currency,
+    }
+    return [name for name, value in fields.items() if value is None or value == ""]
 
 
 class ProviderStatusRow(Base):
@@ -209,8 +250,12 @@ def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
     )
 
 
-def save_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> None:
+def save_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> int:
+    inserted = 0
     for deal in deals:
+        missing = missing_observation_fields(run.id, deal)
+        if missing:
+            continue
         session.add(deal_to_row(run.id, deal))
         session.add(
             PriceObservation(
@@ -219,13 +264,13 @@ def save_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> 
                 run_id=run.id,
                 origin_iata=deal.origin_airport,
                 destination_iata=deal.destination_airport,
-                destination_city=deal.destination_city,
+                destination_city=deal.destination_city or deal.destination_airport,
                 departure_date=deal.outbound_date,
                 return_date=deal.return_date,
                 nights=deal.nights,
                 price=deal.total_price,
                 currency=deal.currency,
-                airline=", ".join(deal.airlines) if deal.airlines else None,
+                airline=", ".join(deal.airlines) if deal.airlines else "Non communiqué",
                 confidence=deal.confidence,
                 warnings=json.dumps(deal.warnings),
                 booking_url=deal.booking_url,
@@ -234,3 +279,5 @@ def save_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> 
                 source=deal.source,
             )
         )
+        inserted += 1
+    return inserted
