@@ -850,7 +850,7 @@ def test_results_diagnostics_show_serpapi_attempted_status_when_zero_raw(tmp_pat
     response = client.get("/results")
 
     assert response.status_code == 200
-    assert "SerpApi appelé, mais 0 offre brute reçue." in response.text
+    assert "SerpApi appelé, HTTP 200, payload sans deal exploitable." in response.text
     assert "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs." not in response.text
     assert "<td>serpapi</td>" in response.text
     assert "<td>200</td>" in response.text
@@ -935,6 +935,70 @@ def test_results_show_google_flight_deals_comparison_and_destinations(tmp_path, 
     assert "Offres brutes : 4 · normalisées : 3 · acceptées : 3 · rejetées : 1" in response.text
     assert "Séville, Londres, Rome" in response.text
     assert "2026-07-01,2026-08-31" in response.text
+
+
+def test_results_show_google_flight_deals_fallback_strategy(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=1, rejected_count=0)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="serpapi_google_flights_deals",
+                enabled=True,
+                ok=True,
+                key_present=True,
+                attempted=True,
+                http_status=200,
+                raw_count=1,
+                normalized_count=1,
+                accepted_count=1,
+                rejected_count=0,
+                request_params_json=json.dumps(
+                    {
+                        "engine": "google_flights_deals",
+                        "departure_id": "NCE",
+                        "outbound_date": "2026-07-01,2026-08-31",
+                        "winning_strategy": "fallback_travel_duration_1_week",
+                        "fallback_used": True,
+                        "fallback_attempts": [
+                            {
+                                "strategy": "primary_trip_length_1_7",
+                                "http_status": 200,
+                                "raw_count": 0,
+                                "normalized_count": 0,
+                            },
+                            {
+                                "strategy": "fallback_travel_duration_1_week",
+                                "http_status": 200,
+                                "raw_count": 1,
+                                "normalized_count": 1,
+                            },
+                        ],
+                        "payload_diagnostic": {
+                            "search_metadata_status": "Success",
+                            "top_level_keys": ["search_metadata", "deals"],
+                        },
+                    }
+                ),
+                destination_examples_json='["Malte"]',
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert "Stratégie gagnante : fallback_travel_duration_1_week · fallback utilisé=oui" in response.text
+    assert "primary_trip_length_1_7" in response.text
+    assert "fallback_travel_duration_1_week" in response.text
+    assert "<td>1</td>" in response.text
+    assert "api_key" not in response.text
 
 
 def test_results_use_run_snapshot_and_show_cheapest_first(tmp_path, monkeypatch):

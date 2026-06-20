@@ -82,6 +82,27 @@ class RejectedProvider(FlightProvider):
         ]
 
 
+class ErrorPayloadProvider(FlightProvider):
+    name = "serpapi_google_flights_deals"
+
+    def __init__(self, settings):
+        super().__init__(settings)
+        self.last_attempted = True
+        self.last_ok = False
+        self.last_error = "bad *** key"
+        self.last_status_code = 200
+        self.last_raw_count = 0
+        self.last_normalized_count = 0
+        self.last_public_params = {"engine": "google_flights_deals", "fallback_attempts": [{"error": "bad *** key"}]}
+        self.last_destination_examples = []
+
+    def status(self):
+        return ProviderStatus("serpapi_google_flights_deals", enabled=True, key_present=True)
+
+    async def search(self, destinations, date_pairs, *, limit):
+        return []
+
+
 def test_load_destinations():
     destinations = load_destinations()
     assert any(d.airport == "BCN" for d in destinations)
@@ -235,6 +256,27 @@ async def test_run_search_records_disabled_errors_and_rejections(tmp_path):
     assert statuses[2].raw_count == 1
     assert statuses[2].normalized_count == 1
     assert statuses[2].main_rejection_reason == "over budget (1)"
+
+
+@pytest.mark.asyncio
+async def test_run_search_persists_provider_payload_error_status(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path}/x.db",
+        date_to=date.today().replace(year=date.today().year + 1),
+        top_results_limit=5,
+    )
+
+    run_id = await run_search(settings, providers=[ErrorPayloadProvider(settings)])
+
+    factory = init_db(settings)
+    with session_scope(factory) as session:
+        status = session.query(ProviderStatusRow).filter_by(run_id=run_id, name="serpapi_google_flights_deals").one()
+
+    assert status.ok is False
+    assert status.error == "bad *** key"
+    assert status.http_status == 200
+    assert "api_key" not in status.request_params_json
 
 
 @pytest.mark.asyncio

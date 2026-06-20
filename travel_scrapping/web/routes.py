@@ -120,7 +120,7 @@ def diagnostics_context(settings, session, run: SearchRun | None = None) -> dict
     elif serpapi_status and serpapi_status.attempted and serpapi_status.http_status and serpapi_status.http_status != 200:
         no_offer_message = f"SerpApi appelé, statut HTTP {serpapi_status.http_status}."
     elif serpapi_status and serpapi_status.attempted and int(serpapi_status.raw_count or 0) == 0:
-        no_offer_message = "SerpApi appelé, mais 0 offre brute reçue."
+        no_offer_message = "SerpApi appelé, HTTP 200, payload sans deal exploitable."
     elif raw_total == 0:
         no_offer_message = "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs."
     elif rejected_total:
@@ -167,6 +167,8 @@ def google_flight_deals_context(statuses: dict[str, ProviderStatusRow]) -> dict[
         except json.JSONDecodeError:
             examples = []
     endpoint = str(params.get("engine") or (status.name if status else "non disponible"))
+    fallback_attempts = params.get("fallback_attempts") if isinstance(params.get("fallback_attempts"), list) else []
+    payload_diagnostic = params.get("payload_diagnostic") if isinstance(params.get("payload_diagnostic"), dict) else {}
     return {
         "endpoint": endpoint,
         "raw_count": int(status.raw_count or 0) if status else 0,
@@ -179,6 +181,11 @@ def google_flight_deals_context(statuses: dict[str, ProviderStatusRow]) -> dict[
         "attempted": bool(status.attempted) if status else False,
         "http_status": status.http_status if status else None,
         "params": params,
+        "fallback_used": bool(params.get("fallback_used")),
+        "winning_strategy": params.get("winning_strategy"),
+        "fallback_attempts": fallback_attempts,
+        "payload_diagnostic": payload_diagnostic,
+        "diagnostic": params.get("diagnostic"),
         "destination_examples": examples,
         "wrong_endpoint": endpoint != "google_flights_deals",
     }

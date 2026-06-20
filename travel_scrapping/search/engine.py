@@ -96,6 +96,8 @@ def provider_status_row(run_id: int, status) -> ProviderStatusRow:
 
 def enrich_status(row: ProviderStatusRow, provider, *, accepted: int, rejected: int, reasons: Counter[str]) -> None:
     row.attempted = bool(getattr(provider, "last_attempted", row.attempted))
+    row.ok = bool(getattr(provider, "last_ok", row.ok))
+    row.error = getattr(provider, "last_error", row.error)
     row.http_status = getattr(provider, "last_status_code", row.http_status)
     row.raw_count = int(getattr(provider, "last_raw_count", row.raw_count or 0) or 0)
     row.normalized_count = int(getattr(provider, "last_normalized_count", row.normalized_count or 0) or 0)

@@ -18,6 +18,50 @@ from travel_scrapping.search.providers.serpapi_google_flights import (
 )
 
 
+class FakeSerpApiResponse:
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+class FakeAsyncClient:
+    def __init__(self, payloads):
+        self.payloads = list(payloads)
+        self.calls = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get(self, url, params):
+        self.calls.append({"url": url, "params": dict(params)})
+        return FakeSerpApiResponse(self.payloads.pop(0))
+
+
+def deal_payload(code="SVQ", city="Séville", price=50):
+    return {
+        "deals": [
+            {
+                "arrival_airport_code": code,
+                "destination_city": city,
+                "price": price,
+                "outbound_date": "2026-07-16",
+                "return_date": "2026-07-23",
+            }
+        ],
+        "search_metadata": {"status": "Success"},
+    }
+
+
 def test_provider_missing_key_disabled():
     provider = SerpApiGoogleFlightsProvider(Settings(_env_file=None, serpapi_api_key=""))
     assert not provider.status().enabled
@@ -74,7 +118,7 @@ def test_count_tokens_and_public_params():
         ]
     }
     assert count_tokens(payload) == (1, 1, 1)
-    assert public_params({"api_key": "secret", "engine": "google_flights"})["api_key"] == "***"
+    assert "api_key" not in public_params({"api_key": "secret", "engine": "google_flights"})
 
 
 def test_serpapi_deals_params_match_google_flight_deals_request():
@@ -189,6 +233,113 @@ async def test_google_flight_deals_provider_search_uses_flexible_anywhere_params
     assert deals[0].destination_city == "Séville"
     assert provider.last_raw_count == 1
     assert provider.last_normalized_count == 1
+
+
+@pytest.mark.asyncio
+async def test_google_flight_deals_provider_primary_success_skips_fallback(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = FakeAsyncClient([deal_payload()])
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
+        lambda timeout: client,
+    )
+    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
+
+    deals = await provider.search([], [], limit=10)
+
+    assert len(client.calls) == 1
+    assert deals[0].destination_airport == "SVQ"
+    assert provider.last_public_params["winning_strategy"] == "primary_trip_length_1_7"
+    assert provider.last_public_params["fallback_used"] is False
+    assert "api_key" not in provider.last_public_params
+    assert all("api_key" not in attempt["params"] for attempt in provider.last_public_params["fallback_attempts"])
+
+
+@pytest.mark.asyncio
+async def test_google_flight_deals_provider_fallback_travel_duration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = FakeAsyncClient([
+        {"search_metadata": {"status": "Success"}, "departure_informations": []},
+        deal_payload("MLA", "Malte", 71),
+    ])
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
+        lambda timeout: client,
+    )
+    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
+
+    deals = await provider.search([], [], limit=10)
+
+    assert len(client.calls) == 2
+    assert deals[0].destination_airport == "MLA"
+    assert "trip_length" not in client.calls[1]["params"]
+    assert client.calls[1]["params"]["travel_duration"] == "1"
+    assert provider.last_public_params["winning_strategy"] == "fallback_travel_duration_1_week"
+    assert provider.last_public_params["fallback_used"] is True
+
+
+@pytest.mark.asyncio
+async def test_google_flight_deals_provider_fallback_any_duration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = FakeAsyncClient([
+        {"search_metadata": {"status": "Success"}},
+        {"search_metadata": {"status": "Success"}},
+        deal_payload("FCO", "Rome", 50),
+    ])
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
+        lambda timeout: client,
+    )
+    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
+
+    deals = await provider.search([], [], limit=10)
+
+    assert len(client.calls) == 3
+    assert deals[0].destination_airport == "FCO"
+    assert "trip_length" not in client.calls[2]["params"]
+    assert "travel_duration" not in client.calls[2]["params"]
+    assert provider.last_public_params["winning_strategy"] == "fallback_any_duration"
+
+
+@pytest.mark.asyncio
+async def test_google_flight_deals_provider_zero_everywhere_diagnostic(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = FakeAsyncClient([{"search_metadata": {"status": "Success"}} for _ in range(4)])
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
+        lambda timeout: client,
+    )
+    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
+
+    deals = await provider.search([], [], limit=10)
+
+    assert deals == []
+    assert len(client.calls) == 4
+    assert provider.last_raw_count == 0
+    assert provider.last_public_params["diagnostic"] == "SerpApi appelé, HTTP 200, payload sans deal exploitable."
+    assert provider.last_public_params["payload_diagnostic"]["top_level_keys"] == ["search_metadata"]
+
+
+@pytest.mark.asyncio
+async def test_google_flight_deals_provider_http_200_error_sets_error_and_scrubs_key(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = FakeAsyncClient([
+        {"search_metadata": {"status": "Success"}, "error": "bad api_key secret value"},
+    ])
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
+        lambda timeout: client,
+    )
+    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
+
+    deals = await provider.search([], [], limit=10)
+
+    assert deals == []
+    assert provider.last_ok is False
+    assert provider.last_error == "bad *** secret value"
+    dumped = str(provider.last_public_params)
+    assert "api_key" not in dumped
+    assert provider.last_public_params["fallback_attempts"][0]["error"] == "bad *** secret value"
 
 
 @pytest.mark.asyncio

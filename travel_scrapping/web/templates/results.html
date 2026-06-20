@@ -56,15 +56,40 @@
   <p>La recherche ne peut pas reproduire Google Flight Deals : endpoint différent.</p>
   {% endif %}
   <p>Endpoint utilisé : {{ diagnostics.google_flight_deals.endpoint }}</p>
+  <p>Stratégie gagnante : {{ diagnostics.google_flight_deals.winning_strategy or "Non disponible" }} · fallback utilisé={{ diagnostics.google_flight_deals.fallback_used|yes_no }}</p>
   <p>Provider : enabled={{ diagnostics.google_flight_deals.enabled|yes_no }} · key={{ diagnostics.google_flight_deals.key_present|yes_no }} · attempted={{ diagnostics.google_flight_deals.attempted|yes_no }} · HTTP={{ diagnostics.google_flight_deals.http_status or "Non disponible" }}</p>
   <p>Offres brutes : {{ diagnostics.google_flight_deals.raw_count }} · normalisées : {{ diagnostics.google_flight_deals.normalized_count }} · acceptées : {{ diagnostics.google_flight_deals.accepted_count }} · rejetées : {{ diagnostics.google_flight_deals.rejected_count }}</p>
+  {% if diagnostics.google_flight_deals.diagnostic %}
+  <p>{{ diagnostics.google_flight_deals.diagnostic }}</p>
+  {% endif %}
+  {% if diagnostics.google_flight_deals.payload_diagnostic.top_level_keys %}
+  <p>Payload : status={{ diagnostics.google_flight_deals.payload_diagnostic.search_metadata_status or "Non disponible" }} · clés={{ diagnostics.google_flight_deals.payload_diagnostic.top_level_keys|join(", ") }}</p>
+  {% endif %}
   <p>Raison principale de rejet : {{ diagnostics.google_flight_deals.main_rejection_reason or "Non disponible" }}</p>
   <p>Exemples destinations reçues : {{ diagnostics.google_flight_deals.destination_examples|join(", ") }}</p>
+  {% if diagnostics.google_flight_deals.fallback_attempts %}
+  <div class="table-wrapper">
+    <table>
+      <tr><th>Stratégie</th><th>HTTP</th><th>Brut</th><th>Normalisées</th><th>Erreur</th></tr>
+      {% for attempt in diagnostics.google_flight_deals.fallback_attempts %}
+      <tr>
+        <td>{{ attempt.strategy }}</td>
+        <td>{{ attempt.http_status or "Non disponible" }}</td>
+        <td>{{ attempt.raw_count or 0 }}</td>
+        <td>{{ attempt.normalized_count or 0 }}</td>
+        <td>{{ attempt.error or "Non disponible" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
   <div class="table-wrapper">
     <table>
       <tr><th>Paramètre</th><th>Valeur</th></tr>
       {% for key, value in diagnostics.google_flight_deals.params.items() %}
+      {% if key not in ["fallback_attempts", "payload_diagnostic", "diagnostic"] %}
       <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+      {% endif %}
       {% endfor %}
     </table>
   </div>

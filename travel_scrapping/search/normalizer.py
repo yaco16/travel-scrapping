@@ -31,6 +31,7 @@ def scrub_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def scrub_text(value: str) -> str:
     patterns = (
         (r"([?&](?:api_key|key|token|secret)=)[^&\s]+", r"\1***"),
+        (r"(?<![?&])\bapi_key\b", "***"),
     )
     scrubbed = value
     for pattern, replacement in patterns:
