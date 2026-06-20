@@ -5,6 +5,7 @@
 | Provider | Classe | Usage | UI principale |
 | --- | --- | --- | --- |
 | `serpapi_google_flights_deals` | `primary` | Recherche destination libre via Google Flight Deals. Provider principal du projet. | Oui si clé présente et appel exploitable. |
+| `google_travel_explore` | `candidate` | Smoke réel Google Travel Explore via SerpApi. Testé comme remplaçant possible de Deals. | Non: smoke NCE été 2026 retourne HTTP 200 `Success` mais `error="Empty results for departure_id: "NCE"."`, 0 liste exploitable. |
 | `serpapi_google_flights` / `serpapi` | `detail_probe` | Probe ciblé destination précise, pas provider principal pour `anywhere`. | Non, diagnostics avancés seulement. |
 | `travelpayouts` | `optional` | Prix indicatifs/cachés. Désactivé si `TRAVELPAYOUTS_MARKER` absent. | Non si marker absent ou aucune offre actionnable. |
 | `flixbus` / `flixbus_rapidapi` | `optional` | Bus via RapidAPI. Désactivé par défaut côté UX si `403/429` ou clé/quota inexploitable. | Non si rate-limit/abonnement bloque. |
@@ -69,6 +70,14 @@ Utile pour découvrir opérateurs, routes, arrêts et horaires. Pas source de pr
 
 Utile pour le rail, surtout comme standard d'échange. Pour ce MVP, à privilégier via agrégateur au départ avant intégration directe.
 
+## Google Travel Explore
+
+`google_travel_explore` a été testé car l'UI Google Travel Explore affiche des offres visibles alors que `google_flights_deals` ne renvoie plus de clé `deals` pour NCE été 2026.
+
+Smoke réel SerpApi, endpoint `google_travel_explore`, variantes datées `2026-07-16/2026-07-23`, `2026-07-21/2026-07-28`, `2026-08-28/2026-08-31`, `2026-07-01/2026-07-08`: HTTP 200, `search_metadata.status=Success`, top-level keys `search_metadata`, `search_parameters`, `search_information`, `error`, aucune clé `destinations` ou `flights`, 0 brut, SVQ/STN/FCO absents. Erreur SerpApi: `Empty results for departure_id: "NCE".`
+
+Décision: ne pas intégrer `google_travel_explore` comme provider principal tant que SerpApi retourne 0 liste exploitable. Garder `serpapi_google_flights_deals` comme provider avion principal/fallback diagnostiqué, sans inventer d'offres. Aucun changement bus/train réel.
+
 ## Décision
 
-Priorité actuelle: fiabiliser `serpapi_google_flights_deals`, snapshot run et UI. Aucune nouvelle API implémentée dans cette tranche.
+Priorité actuelle: obtenir une source avion discovery qui retourne une liste exploitable ou clarifier avec SerpApi pourquoi Explore/Deals sont vides pour NCE été 2026. Aucune nouvelle API bus/train implémentée dans cette tranche.
