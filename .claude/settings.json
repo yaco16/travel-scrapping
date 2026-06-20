@@ -1,0 +1,82 @@
+{
+    "$schema": "https://json.schemastore.org/claude-code-settings.json",
+    "permissions": {
+        "defaultMode": "default",
+        "allow": [
+            "Edit",
+            "Write",
+            "Bash",
+            "WebFetch",
+            "Edit(.claude/settings.local.json)",
+            "Write(.claude/settings.local.json)",
+            "Edit(.claude/settings.json)",
+            "Write(.claude/settings.json)"
+        ],
+        "deny": [
+            "Read",
+            "Grep",
+            "Glob",
+            "Bash(mkdir)",
+            "Bash(mkdir *)",
+            "Bash(cp)",
+            "Bash(cp *)",
+            "Bash(rm)",
+            "Bash(rm *)",
+            "Bash(ln)",
+            "Bash(ln *)",
+            "Skill(keybindings-help)",
+            "Skill(statusline-setup)",
+            "Skill(claude-api)",
+            "Skill(loop)"
+        ]
+    },
+    "hooks": {
+        "UserPromptSubmit": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "MARKER=\"/tmp/.travel_scrapping_agents_${PPID}\"; if [ ! -f \"$MARKER\" ]; then touch \"$MARKER\"; rtk read -l aggressive /home/yaco/github/travel-scrapping/AGENTS.md; fi"
+                    }
+                ]
+            }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 /home/yaco/github/travel-scrapping/.codex/hooks/rtk_guard.py",
+                        "statusMessage": "RTK guard"
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "case \"${CLAUDE_FILE_PATH}\" in\n  *AGENTS.md)\n    rtk test .venv/bin/python -m pytest tests/test_strategy_docs.py 2>&1 || true\n    ;;\n  */docs/strategy/*.md|*/docs/tasks/*.md|*/TODO.md)\n    rtk test .venv/bin/python -m pytest tests/test_strategy_docs.py 2>&1 || true\n    ;;\nesac"
+                    }
+                ]
+            },
+            {
+                "matcher": "Bash",
+                "hooks": []
+            }
+        ],
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 -c \"\nimport os, json\nlog = f'/tmp/.travel_scrapping_rtk_log_{os.getppid()}'\nif not os.path.exists(log):\n    raise SystemExit(0)\nlines = open(log).read().strip().splitlines()\nif not lines:\n    raise SystemExit(0)\nseen = {}\nfor line in lines:\n    parts = line.split('|', 1)\n    tool, cmd = parts if len(parts) == 2 else (parts[0], '')\n    if tool not in seen:\n        seen[tool] = []\n    seen[tool].append(cmd)\nsummary = 'RTK non respecte cette session :\\n'\nfor tool, cmds in seen.items():\n    for cmd in cmds:\n        summary += f'- {tool} nu : {cmd}\\n'\nprint(json.dumps({'hookSpecificOutput': {'hookEventName': 'Stop', 'additionalContext': summary}}))\n\" 2>/dev/null || true"
+                    }
+                ]
+            }
+        ]
+    }
+}

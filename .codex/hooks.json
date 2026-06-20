@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "statusMessage": "RTK guard",
+            "command": "python3 .codex/hooks/rtk_guard.py"
+          }
+        ]
+      }
+    ]
+  }
+}
