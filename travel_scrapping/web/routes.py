@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import date
+from typing import cast
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,6 +24,23 @@ templates.env.filters["airlines_display"] = presentation.airlines_display
 templates.env.filters["warnings_display"] = presentation.warnings_display
 templates.env.filters["booking_display"] = presentation.booking_display
 router = APIRouter()
+
+
+def valid_display_deal(deal: Deal, settings) -> bool:
+    if not deal.outbound_date or not deal.return_date:
+        return False
+    outbound_date = cast(date, deal.outbound_date)
+    return_date = cast(date, deal.return_date)
+    nights = (return_date - outbound_date).days
+    if nights != deal.nights:
+        deal.nights = nights
+    if not settings.min_nights <= nights <= settings.max_nights:
+        return False
+    if return_date > settings.effective_search_end_date:
+        return False
+    if deal.total_price_eur is None or deal.total_price_eur >= settings.max_roundtrip_price_eur:
+        return False
+    return True
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -56,7 +75,9 @@ def results(request: Request):
     factory = init_db(settings)
     with session_scope(factory) as session:
         run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
-        deals = list(run.deals) if run else []
+        deals = [deal for deal in list(run.deals) if valid_display_deal(deal, settings)] if run else []
+        for deal in deals:
+            deal.destination_display_name = presentation.destination_display(deal)  # type: ignore[attr-defined]
         return templates.TemplateResponse(
             request,
             "results.html",
@@ -83,7 +104,13 @@ def history(request: Request):
     factory = init_db(settings)
     with session_scope(factory) as session:
         runs = list(session.scalars(select(SearchRun).order_by(SearchRun.id.desc()).limit(50)))
-        return templates.TemplateResponse(request, "history.html", {"runs": runs})
+        runs_count = session.query(SearchRun).count()
+        observations_count = session.query(PriceObservation).count()
+        return templates.TemplateResponse(
+            request,
+            "history.html",
+            {"runs": runs, "runs_count": runs_count, "observations_count": observations_count},
+        )
 
 
 @router.get("/deal/{deal_id}", response_class=HTMLResponse)

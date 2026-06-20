@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Historique</h1>
-<table>
-  <tr><th>ID</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th></tr>
-  {% for run in runs %}
-  <tr><td>{{ run.id }}</td><td>{{ run.status }}</td><td>{{ run.accepted_count }}</td><td>{{ run.rejected_count }}</td><td>{{ run.cheapest_price_eur or "-" }}</td></tr>
-  {% endfor %}
-</table>
+<div class="table-wrapper">
+  <table>
+    <tr><th>ID</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th></tr>
+    {% for run in runs %}
+    <tr><td>{{ run.id }}</td><td>{{ run.status }}</td><td>{{ run.accepted_count }}</td><td>{{ run.rejected_count }}</td><td>{{ run.cheapest_price_eur|price_display }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<h2>Diagnostic base de données</h2>
+<p>Campagnes: {{ runs_count }} · Observations: {{ observations_count }}</p>
+<p><a href="/sqlite">Détails techniques</a></p>
 {% endblock %}

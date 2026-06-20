@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 FRENCH_CITY_BY_IATA = {
     "BTS": "Bratislava",
+    "VCE": "Venise",
+    "SVQ": "Séville",
+    "BCN": "Barcelone",
     "VIE": "Vienne",
     "BRU": "Bruxelles",
     "PRG": "Prague",
-    "BCN": "Barcelone",
     "MAD": "Madrid",
     "FCO": "Rome",
     "CIA": "Rome",
@@ -39,22 +41,40 @@ def parse_json_list(value: str | None) -> list[str]:
 
 
 def destination_display(deal: Any) -> str:
+    display_name = getattr(deal, "destination_display_name", None)
+    if display_name:
+        return str(display_name)
     city = getattr(deal, "destination_city", None)
     airport = str(getattr(deal, "destination_airport", "") or "")
-    return FRENCH_CITY_BY_IATA.get(airport.upper()) or city or airport
+    code = airport.upper()
+    if code in FRENCH_CITY_BY_IATA:
+        return FRENCH_CITY_BY_IATA[code]
+    if city:
+        return str(city)
+    return f"{code} inconnu" if code else "Destination inconnue"
 
 
-def short_date(value: date) -> str:
-    return value.strftime("%d/%m/%y")
+def short_date(value: date | datetime | str | None) -> str:
+    if not value:
+        return "Non disponible"
+    if isinstance(value, str):
+        try:
+            value = date.fromisoformat(value[:10])
+        except ValueError:
+            return "Non disponible"
+    if hasattr(value, "strftime"):
+        return value.strftime("%d/%m/%y")
+    return "Non disponible"
 
 
 def price_display(value: float | int | Decimal | None) -> str:
     if value is None:
-        return ""
+        return "Non disponible"
     amount = Decimal(str(value))
     if amount == amount.to_integral():
-        return str(int(amount))
-    return str(amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        return f"{int(amount):,}".replace(",", " ")
+    formatted = f"{amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f}"
+    return formatted.replace(",", " ").replace(".", ",")
 
 
 def airlines_display(airlines_json: str | None) -> str:

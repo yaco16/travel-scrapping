@@ -12,16 +12,28 @@ from travel_scrapping.web.presentation import (
 
 
 def test_destination_display_uses_french_city_mapping():
-    deal = SimpleNamespace(destination_airport="BTS", destination_city=None)
-    assert destination_display(deal) == "Bratislava"
+    assert destination_display(SimpleNamespace(destination_airport="BTS", destination_city=None)) == "Bratislava"
+    assert destination_display(SimpleNamespace(destination_airport="VCE", destination_city=None)) == "Venise"
+    assert destination_display(SimpleNamespace(destination_airport="SVQ", destination_city=None)) == "Séville"
+    assert destination_display(SimpleNamespace(destination_airport="BCN", destination_city=None)) == "Barcelone"
+
+
+def test_destination_display_unknown_code_has_clear_fallback():
+    deal = SimpleNamespace(destination_airport="XXX", destination_city=None)
+    assert destination_display(deal) == "XXX inconnu"
 
 
 def test_short_date_format():
     assert short_date(date(2026, 7, 2)) == "02/07/26"
+    assert short_date("2026-07-02") == "02/07/26"
+    assert short_date(None) == "Non disponible"
+    assert short_date("") == "Non disponible"
+    assert short_date("invalid") == "Non disponible"
 
 
 def test_price_display_without_currency_or_decimals():
     assert price_display(55.00) == "55"
+    assert price_display(1234.5) == "1 234,50"
 
 
 def test_empty_airlines_displayed_as_unknown():

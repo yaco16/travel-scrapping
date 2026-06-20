@@ -4,25 +4,27 @@
 {% if email_enabled %}
 <form action="/email" method="post"><button type="submit">Envoyer email</button></form>
 {% endif %}
-<table>
-  <tr><th>Destination</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Airlines</th><th>Source</th><th>Confiance</th><th>Warnings</th><th>Lien</th></tr>
-  {% for deal in deals %}
-  <tr>
-    <td><a href="/deal/{{ deal.id }}">{{ deal|destination_display }}</a></td>
-    <td>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }}</td>
-    <td>{{ deal.nights }}</td>
-    <td>{{ deal.total_price_eur|price_display }}</td>
-    <td>{{ deal.airlines_json|airlines_display }}</td>
-    <td>{{ deal.source }}</td>
-    <td>{{ deal.confidence }}</td>
-    <td>
-      {% for warning in deal.warnings_json|warnings_display %}
-        <span class="badge">{{ warning }}</span>
-      {% endfor %}
-    </td>
-    <td>{% if deal.booking_url %}<a href="{{ deal.booking_url }}" rel="noreferrer">Réserver</a>{% else %}{{ deal|booking_display }}{% endif %}</td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="table-wrapper">
+  <table>
+    <tr><th>Destination</th><th>Dates</th><th>Nuits</th><th>Prix</th><th>Airlines</th><th>Source</th><th>Confiance</th><th>Warnings</th><th>Lien</th></tr>
+    {% for deal in deals %}
+    <tr>
+      <td><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a></td>
+      <td>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }}</td>
+      <td>{{ deal.nights }}</td>
+      <td>{{ deal.total_price_eur|price_display }}</td>
+      <td>{{ deal.airlines_json|airlines_display }}</td>
+      <td>{{ deal.source }}</td>
+      <td>{{ deal.confidence }}</td>
+      <td>
+        {% for warning in deal.warnings_json|warnings_display %}
+          <span class="badge">{{ warning }}</span>
+        {% endfor %}
+      </td>
+      <td>{% if deal.booking_url %}<a href="{{ deal.booking_url }}" rel="noreferrer">Réserver</a>{% else %}{{ deal|booking_display }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
 {% if not deals %}<p>Aucun deal accepté.</p>{% endif %}
 {% endblock %}
