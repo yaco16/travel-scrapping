@@ -53,6 +53,7 @@
           </div>
           <h3><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a>{% if deal.destination_country %}<span class="destination-country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h3>
           <p>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits</p>
+          {% include "_deal_timeline.html" %}
         </div>
         <div class="price-block">
           <strong>{{ deal.total_price_eur|price_display }}</strong>

@@ -397,7 +397,8 @@ def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
     assert "Étape 02 — Recherche lancée" in response.text
     assert "step-spinner" not in response.text
     assert '<span class="step-state pending-blink">pending</span>' in response.text
-    assert '<meta http-equiv="refresh" content="5">' in response.text
+    assert 'hx-trigger="every 2s"' in response.text
+    assert '<meta http-equiv="refresh"' not in response.text
 
 
 def test_results_tabs_use_htmx_and_anchor_fallback(tmp_path, monkeypatch):
@@ -515,7 +516,7 @@ def test_results_filter_by_train_mode(tmp_path, monkeypatch):
     assert "1 offres affichées sur 3 acceptées" in response.text
 
 
-def test_results_htmx_request_returns_offers_panel_only(tmp_path, monkeypatch):
+def test_results_htmx_request_returns_full_page_for_hx_select(tmp_path, monkeypatch):
     get_settings.cache_clear()
     db_url = f"sqlite:///{tmp_path}/web.db"
     monkeypatch.setenv("DATABASE_URL", db_url)
@@ -530,8 +531,30 @@ def test_results_htmx_request_returns_offers_panel_only(tmp_path, monkeypatch):
     response = client.get(f"/results?run_id={run_id}&mode=bus", headers={"HX-Request": "true"})
 
     assert response.status_code == 200
-    assert response.text.lstrip().startswith('<div id="results-offers-panel">')
-    assert "page-hero" not in response.text
+    assert "page-hero" in response.text
+    assert 'id="results-offers-panel"' in response.text
+
+
+def test_results_pending_run_polls_via_htmx_and_completed_run_does_not(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    with session_scope(factory) as session:
+        pending_run = SearchRun(status="pending", accepted_count=0, rejected_count=0)
+        completed_run = SearchRun(status="completed", accepted_count=0, rejected_count=0)
+        session.add_all([pending_run, completed_run])
+        session.flush()
+        pending_id = pending_run.id
+        completed_id = completed_run.id
+
+    client = TestClient(create_app())
+    pending_response = client.get(f"/results?run_id={pending_id}")
+    completed_response = client.get(f"/results?run_id={completed_id}")
+
+    assert 'hx-trigger="every 2s"' in pending_response.text
+    assert "http-equiv=\"refresh\"" not in pending_response.text
+    assert 'hx-trigger="every 2s"' not in completed_response.text
 
 
 def test_deal_detail_page_uses_polished_layout_without_raw_warnings(tmp_path, monkeypatch):

@@ -40,6 +40,12 @@ def format_price_fr(amount: float | int | Decimal | None, currency: str = "EUR",
     return f"{formatted} {symbol}".strip()
 
 
+def format_clock_fr(value: datetime | None) -> str:
+    if value is None:
+        return ""
+    return value.strftime("%H:%M")
+
+
 def format_duration(minutes: int | None, *, diagnostic: bool = False) -> str:
     if minutes is None:
         return "Non disponible" if diagnostic else ""

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal
 
 
@@ -66,6 +66,10 @@ class Offer:
             total_price=float(self.price_amount or 0),
             currency=self.price_currency,
             destination_city=self.destination_name,
+            outbound_departure_at=self.departure_at,
+            outbound_arrival_at=(
+                self.departure_at + timedelta(minutes=self.duration_minutes) if self.duration_minutes else None
+            ),
             airlines=airlines,
             is_direct=(self.stops_count == 0 if self.stops_count is not None else None),
             has_connection=(self.stops_count > 0 if self.stops_count is not None else None),
@@ -108,6 +112,8 @@ class DealCandidate:
     return_duration_hours: float | None = None
     max_layover_hours: float | None = None
     has_overnight_airport: bool | None = None
+    outbound_departure_at: datetime | None = None
+    outbound_arrival_at: datetime | None = None
     booking_url: str | None = None
     raw_payload: dict[str, Any] = field(default_factory=dict)
     fetched_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

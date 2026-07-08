@@ -63,10 +63,6 @@ def country_display(value: str | None) -> str:
     return COUNTRY_LABELS.get(label.upper(), label)
 
 
-def wants_results_partial(request: Request) -> bool:
-    return request.headers.get("HX-Request", "").lower() == "true"
-
-
 templates = Jinja2Templates(directory="travel_scrapping/web/templates")
 templates.env.filters["destination_display"] = presentation.destination_display
 templates.env.filters["short_date"] = presentation.short_date
@@ -79,6 +75,7 @@ templates.env.filters["mode_display"] = presentation.mode_display
 templates.env.filters["duration_display"] = presentation.duration_display
 templates.env.filters["provider_status_display"] = presentation.provider_status_display
 templates.env.filters["date_time"] = presentation.date_time
+templates.env.filters["clock_display"] = presentation.clock_display
 templates.env.filters["yes_no"] = presentation.yes_no
 templates.env.filters["country_display"] = country_display
 router = APIRouter()
@@ -498,10 +495,9 @@ def results(request: Request):
         all_run_deals = [deal for deal in list(run.deals) if valid_display_deal(deal)] if run else []
         cheapest = min((deal.total_price_eur for deal in all_run_deals), default=None)
         groups = provider_groups(provider_statuses)
-        template_name = "_results_offers.html" if wants_results_partial(request) else "results.html"
         return templates.TemplateResponse(
             request,
-            template_name,
+            "results.html",
             {
                 "run": run,
                 "run_terminal": bool(run and run.status in TERMINAL_RUN_STATUSES),

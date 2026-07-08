@@ -1,9 +1,4 @@
 {% extends "base.html" %}
-{% block head %}
-{% if run and not run_terminal %}
-<meta http-equiv="refresh" content="5">
-{% endif %}
-{% endblock %}
 {% block content %}
 <section class="page-hero">
   <div>
@@ -14,6 +9,14 @@
   {% if run %}<strong class="status-badge {{ 'pending-blink' if run.status == 'pending' else '' }}">{{ run.status }}</strong>{% endif %}
 </section>
 
+<div id="live-region"
+  {%- if run and not run_terminal %}
+  hx-get="/results?run_id={{ run.id }}{% if mode and mode != 'all' %}&mode={{ mode }}{% endif %}"
+  hx-trigger="every 2s"
+  hx-select="#live-region"
+  hx-target="#live-region"
+  hx-swap="outerHTML"
+  {%- endif %}>
 {% if run %}
 <section class="metric-grid">
   <div class="metric-card"><span>Offres acceptées</span><strong>{{ run.accepted_count }}</strong></div>
@@ -48,6 +51,7 @@
 {% endif %}
 
 {% include "_results_offers.html" %}
+</div>
 
 {% if diagnostics.google_flight_deals %}
 <details class="panel details-panel">

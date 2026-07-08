@@ -50,6 +50,8 @@ class Deal(Base):
     destination_country: Mapped[str | None] = mapped_column(String(128), nullable=True)
     outbound_date: Mapped[object] = mapped_column(Date)
     return_date: Mapped[object] = mapped_column(Date)
+    outbound_departure_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    outbound_arrival_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     nights: Mapped[int] = mapped_column(Integer)
     total_price: Mapped[float] = mapped_column(Float)
     currency: Mapped[str] = mapped_column(String(8))
@@ -236,6 +238,8 @@ def migrate_sqlite(engine) -> None:
     deal_columns = {
         "transport_mode": "VARCHAR(16) DEFAULT 'flight'",
         "provider": "VARCHAR(64)",
+        "outbound_departure_at": "DATETIME",
+        "outbound_arrival_at": "DATETIME",
         "operator_name": "VARCHAR(128)",
         "duration_minutes": "INTEGER",
         "stops_count": "INTEGER",
@@ -345,6 +349,8 @@ def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
         destination_country=deal.destination_country,
         outbound_date=deal.outbound_date,
         return_date=deal.return_date,
+        outbound_departure_at=deal.outbound_departure_at.replace(tzinfo=None) if deal.outbound_departure_at else None,
+        outbound_arrival_at=deal.outbound_arrival_at.replace(tzinfo=None) if deal.outbound_arrival_at else None,
         nights=deal.nights,
         total_price=deal.total_price,
         currency=deal.currency,
@@ -372,6 +378,13 @@ def deal_to_row(run_id: int, deal: DealCandidate) -> Deal:
         raw_payload_z=compress_payload(deal.raw_payload),
         fetched_at=deal.fetched_at.replace(tzinfo=None),
     )
+
+
+def replace_run_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> int:
+    session.query(Deal).filter(Deal.run_id == run.id).delete()
+    session.query(PriceObservation).filter(PriceObservation.run_id == run.id).delete()
+    session.flush()
+    return save_deals(session, run, deals)
 
 
 def save_deals(session: Session, run: SearchRun, deals: list[DealCandidate]) -> int:

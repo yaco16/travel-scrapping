@@ -1,0 +1,21 @@
+<div class="deal-timeline">
+  <div class="deal-timeline-point">
+    <strong>{{ deal.outbound_departure_at|clock_display or "Horaire non communiqué" }}</strong>
+    <span>Départ</span>
+  </div>
+  <div class="deal-timeline-track">
+    <span class="deal-timeline-line"></span>
+    {% if deal.stops_count %}
+    <span class="deal-timeline-stop" title="Durée d'escale non communiquée">{{ deal.stops_count }} escale{{ 's' if deal.stops_count > 1 else '' }}</span>
+    {% endif %}
+  </div>
+  <div class="deal-timeline-point">
+    <strong>
+      {{ deal.outbound_arrival_at|clock_display or "Horaire non communiqué" }}
+      {%- if deal.outbound_arrival_at and deal.outbound_departure_at and deal.outbound_arrival_at.date() != deal.outbound_departure_at.date() %}
+      <span class="deal-timeline-badge">+1</span>
+      {%- endif %}
+    </strong>
+    <span>Arrivée</span>
+  </div>
+</div>

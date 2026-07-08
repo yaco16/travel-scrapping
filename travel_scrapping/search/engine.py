@@ -13,7 +13,7 @@ from travel_scrapping.config import Settings
 from travel_scrapping.bus.comparabus import ComparabusProvider
 from travel_scrapping.bus.flixbus_openapi import FlixBusOpenApiProvider
 from travel_scrapping.bus.flixbus_rapidapi import FlixBusRapidApiProvider
-from travel_scrapping.db import ProviderStatusRow, SearchRun, init_db, save_deals, session_scope
+from travel_scrapping.db import ProviderStatusRow, SearchRun, init_db, replace_run_deals, session_scope
 from travel_scrapping.db import set_run_config_snapshot
 from travel_scrapping.schemas import DealCandidate, Destination
 from travel_scrapping.search.date_grid import generate_roundtrip_dates
@@ -161,6 +161,15 @@ async def run_search(
             all_deals: list[DealCandidate] = []
             rejected = 0
             provider_records: list[dict[str, object]] = []
+
+            def publish_progress() -> None:
+                preview = sort_deals(all_deals)[: settings.top_results_limit]
+                replace_run_deals(session, run, preview)
+                run.accepted_count = len(preview)
+                run.rejected_count = rejected + (len(all_deals) - len(preview))
+                run.cheapest_price_eur = preview[0].total_price_eur if preview else None
+                session.commit()
+
             for provider in providers:
                 status = provider.status()
                 row = provider_status_row(run.id, status)
@@ -196,6 +205,7 @@ async def run_search(
                 if row.normalized_count == 0:
                     row.normalized_count = len(candidates)
                 enrich_status(row, provider, accepted=provider_accepted, rejected=provider_rejected, reasons=provider_reasons)
+                publish_progress()
             if mode_set & {"bus", "train"}:
                 distribusion_provider = DistribusionGroundTransportProvider(settings)
                 status = distribusion_provider.status()
@@ -243,6 +253,7 @@ async def run_search(
                             rejected=ground_rejected,
                             reasons=ground_reasons,
                         )
+                    publish_progress()
             if "bus" in mode_set:
                 bus_providers_to_run = [
                     ComparabusProvider(settings),
@@ -307,8 +318,9 @@ async def run_search(
                     row.main_rejection_reason = main_reason(bus_reasons)
                     row.request_params_json = json.dumps(getattr(bus_provider, "last_public_params", {}) or {})
                     row.destination_examples_json = json.dumps(getattr(bus_provider, "last_destination_examples", []) or [])
+                    publish_progress()
             sorted_deals = sort_deals(all_deals)[: settings.top_results_limit]
-            inserted = save_deals(session, run, sorted_deals)
+            inserted = replace_run_deals(session, run, sorted_deals)
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
             run.accepted_count = inserted
