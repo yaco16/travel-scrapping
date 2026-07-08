@@ -1,7 +1,9 @@
+{% set bus_route = deal|bus_route_details %}
+<div class="deal-route">
 <div class="deal-timeline">
   <div class="deal-timeline-point">
     <strong>{{ deal.outbound_departure_at|clock_display or "Horaire non communiqué" }}</strong>
-    <span>Départ</span>
+    <span>{{ bus_route.origin_station if bus_route else "Départ" }}</span>
   </div>
   <div class="deal-timeline-track">
     <span class="deal-timeline-line"></span>
@@ -16,6 +18,31 @@
       <span class="deal-timeline-badge">+1</span>
       {%- endif %}
     </strong>
-    <span>Arrivée</span>
+    <span>{{ bus_route.destination_station if bus_route else "Arrivée" }}</span>
   </div>
+</div>
+{% if bus_route and (bus_route.stopovers or bus_route.unavailable_stopovers) %}
+<div class="bus-stopover-list" aria-label="Détails des escales">
+  {% for stopover in bus_route.stopovers %}
+  <div class="bus-stopover-row">
+    <span class="bus-stopover-index">Escale {{ stopover.index }}</span>
+    <strong>{{ stopover.station or "Arrêt non communiqué" }}</strong>
+    <span>Arrivée {{ stopover.arrival_at|clock_display or "?" }}</span>
+    <span>Départ {{ stopover.departure_at|clock_display or "?" }}</span>
+    <span>Attente {{ stopover.duration_minutes|duration_display or "?" }}</span>
+    <span>Avant {{ stopover.inbound_duration_minutes|duration_display or "?" }}</span>
+    <span>Après {{ stopover.outbound_duration_minutes|duration_display or "?" }}</span>
+  </div>
+  {% endfor %}
+  {% if bus_route.unavailable_stopovers %}
+    {% for _ in range(bus_route.unavailable_stopovers) %}
+  <div class="bus-stopover-row muted">
+    <span class="bus-stopover-index">Escale {{ loop.index }}</span>
+    <strong>Arrêt non communiqué</strong>
+    <span>Détails non communiqués par le fournisseur</span>
+  </div>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endif %}
 </div>

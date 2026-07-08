@@ -1,5 +1,22 @@
 # TODO
 
+## Corrections faites (2026-07-08, Travelpayouts marker + deep link Aviasales)
+
+- Utilisateur a obtenu `TRAVELPAYOUTS_TOKEN` et `TRAVELPAYOUTS_MARKER` (compte Travelpayouts, projet "newsletter") et les a renseignés dans `.env`. `INCLUDE_INDICATIVE=true` ajouté aussi (permettait d'activer le provider en mode dégradé avant l'obtention du marker).
+- Bug racine identifié en testant en direct avec le vrai token : l'endpoint `v2/prices/latest` de Travelpayouts ne renvoie **jamais** de compagnie aérienne ni de lien de réservation dans son payload (seulement route/prix/dates/`gate` = nom de l'OTA source) — donc toutes les offres étaient rejetées comme non actionables (`missing_fields: booking_url, operator_name`) même une fois le marker présent, car notre code ne construisait aucun lien lui-même.
+- Corrigé dans `travelpayouts.py` : nouvelle fonction `build_aviasales_deep_link()` qui construit un vrai lien de recherche Aviasales (`aviasales.com/search/{origin}{ddmm}{destination}{ddmm}1?marker=...`) à partir du marker + route/dates réelles quand le payload ne fournit pas déjà un lien explicite. Quand aucune compagnie n'est communiquée par la source, le `gate` (OTA réel ayant trouvé le prix, ex. "Farera") est utilisé comme `operator_name` avec un warning explicite `"operator is booking site (gate), not confirmed airline"` pour ne pas laisser croire à une compagnie confirmée — conforme à la règle "ne jamais inventer" (donnée réelle de la source, pas fabriquée).
+- Test d'isolation corrigé : `tests/test_web.py` utilisait `monkeypatch.delenv("TRAVELPAYOUTS_MARKER")` pour simuler un marker absent, ce qui ne neutralise pas la valeur lue depuis `.env` (pydantic-settings lit `.env` indépendamment de `os.environ`). Remplacé par `monkeypatch.setenv("TRAVELPAYOUTS_MARKER", "")` (2 occurrences) pour une vraie isolation, indépendante du contenu local de `.env`.
+- Vérifié en live avec le vrai token + marker : 20 offres brutes reçues, 20 actionables (0 avant), 2 passent tous les filtres prix/nuits/dates du run courant.
+- Checks : `pytest` (suite complète), `ruff check` (fichiers modifiés), `pyright` (fichiers modifiés) tous verts.
+
+## Corrections faites (2026-07-08, détails trajet bus)
+
+- Liste résultats bus : la frise affiche maintenant station de départ et station d'arrivée quand le payload source les contient. En cas d'escale avec segments, détail ajouté sous la frise : durée de chaque segment, arrêt d'escale, heure d'arrivée et heure de départ de l'escale.
+- Extraction prudente depuis `raw_payload_z` uniquement : aucune station/escale inventée si la source ne fournit pas les segments.
+- Correctif suite retour UI : ComparaBUS persiste maintenant les stations résolues dans le payload affichable (`departure_station_name`, `arrival_station_name`, `legs`) pour éviter les codes dans la frise. Si `connection > 0` mais que le fournisseur ne donne pas les segments/arrêts d'escale, l'UI affiche explicitement que les détails d'escale ne sont pas communiqués.
+- Présentation escales améliorée : une ligne visuelle par escale avec station, heure d'arrivée, heure de départ, attente, durée du trajet avant et durée du trajet après.
+- Checks : `pytest tests/test_bus.py tests/test_presentation.py tests/test_web.py -q`, `ruff check` fichiers modifiés, `pyright`, `git diff --check` verts.
+
 ## Corrections faites (2026-07-08, Ryanair zero résultat + frise centrée)
 
 - Bug racine "l'avion ne renvoie aucun résultat" : `RyanairProvider` (`ryanair.py`) envoyait `limit=min(settings.top_results_limit, 100)` (50 par défaut) à `roundTripFares` v4, mais cette API renvoie HTTP 400 `InvalidLimit` dès que `limit > 20` (vérifié en direct par curl : 200 jusqu'à 20, 400 à partir de 21). Toutes les requêtes Ryanair échouaient donc silencieusement. Corrigé : nouvelle constante `RYANAIR_MAX_LIMIT = 20`, `limit=min(limit, RYANAIR_MAX_LIMIT)`. Vérifié en live avec les critères exacts rapportés (NCE, 1-7 nuits, 10 juil-31 août, ≤150€, 1 escale max) : Ryanair passe de HTTP 400/0 résultat à HTTP 200/2 offres réelles.
@@ -42,6 +59,7 @@
 - `flixbus` RapidAPI renvoie `429 Too many requests` : quota externe, rien a corriger cote code aujourd'hui.
 - `comparabus` : `HTTP 200 ok=1 raw_count=0` peut aussi refleter un vrai "0 route" par destination (donnee externe), a confirmer apres le fix d'agregation.
 - Étape 01 - Smoke live Ryanair : fait, Ryanair renvoie des résultats réels (cf. section du jour). Reste à surveiller si l'API resserre encore la limite.
-- Étape 02 - Creer compte Amadeus sur `developers.amadeus.com`, copier `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` dans `.env`, smoke live — rapprocherait la couverture vols de celle de Google Flights.
+- Étape 02 - Abandonnee : decision utilisateur (2026-07-08) de ne pas configurer Amadeus, l'API devant etre retiree prochainement. `AmadeusProvider` reste dans le code (desactive faute de cles) mais n'est plus une action a mener.
+- Étape 02bis - Travelpayouts : fait (cf. section du jour). Token + marker configures, deep link Aviasales construit cote code, offres actionables en live.
 - Étape 03 - FlixBus : chercher un lien réservation contractuel pour les résultats OpenAPI ou passer par fournisseur bus contractuel. Garder 0 offre tant qu'aucun lien réservation explicite n'est présent.
 - Étape 04 - Demander acces demo/sandbox `Distribusion` et documentation/API contractuelle.

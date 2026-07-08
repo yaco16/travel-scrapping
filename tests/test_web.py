@@ -1,4 +1,5 @@
 import json
+import zlib
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -55,7 +56,7 @@ def test_home_keeps_search_form_and_hides_provider_setup_warnings(tmp_path, monk
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
     monkeypatch.setenv("TRAVELPAYOUTS_TOKEN", "token")
-    monkeypatch.delenv("TRAVELPAYOUTS_MARKER", raising=False)
+    monkeypatch.setenv("TRAVELPAYOUTS_MARKER", "")
     client = TestClient(create_app())
 
     response = client.get("/")
@@ -353,6 +354,8 @@ def test_results_operator_moves_to_bottom_right_pill_without_provider_ok(tmp_pat
                 destination_airport="VCE",
                 outbound_date=date(2026, 7, 2),
                 return_date=date(2026, 7, 6),
+                outbound_departure_at=datetime(2026, 7, 2, 8, 0),
+                outbound_arrival_at=datetime(2026, 7, 2, 17, 45),
                 nights=4,
                 total_price=35,
                 currency="EUR",
@@ -362,6 +365,26 @@ def test_results_operator_moves_to_bottom_right_pill_without_provider_ok(tmp_pat
                 booking_url="https://example.test/flixbus",
                 actionable=True,
                 confidence="high",
+                raw_payload_z=zlib.compress(
+                    json.dumps(
+                        {
+                            "legs": [
+                                {
+                                    "departure_station_name": "Nice Aéroport",
+                                    "arrival_station_name": "Milan Lampugnano",
+                                    "departure_at": "2026-07-02T08:00:00",
+                                    "arrival_at": "2026-07-02T13:30:00",
+                                },
+                                {
+                                    "departure_station_name": "Milan Lampugnano",
+                                    "arrival_station_name": "Venise Tronchetto",
+                                    "departure_at": "2026-07-02T14:15:00",
+                                    "arrival_at": "2026-07-02T17:45:00",
+                                },
+                            ]
+                        }
+                    ).encode()
+                ),
                 fetched_at=now,
             )
         )
@@ -374,6 +397,15 @@ def test_results_operator_moves_to_bottom_right_pill_without_provider_ok(tmp_pat
     assert '<span class="operator-pill">FlixBus</span>' in response.text
     assert "02/07/26 - 06/07/26" in response.text
     assert "35,00 €" in response.text
+    assert "Nice Aéroport" in response.text
+    assert "Venise Tronchetto" in response.text
+    assert "Escale 1" in response.text
+    assert "Milan Lampugnano" in response.text
+    assert "Avant 5h30" in response.text
+    assert "Attente 0h45" in response.text
+    assert "Après 3h30" in response.text
+    assert "Arrivée 13:30" in response.text
+    assert "Départ 14:15" in response.text
 
 
 def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
@@ -1078,7 +1110,7 @@ def test_results_show_all_rejected_diagnostic_and_marker_warning(tmp_path, monke
     db_url = f"sqlite:///{tmp_path}/web.db"
     monkeypatch.setenv("DATABASE_URL", db_url)
     monkeypatch.setenv("TRAVELPAYOUTS_TOKEN", "token")
-    monkeypatch.delenv("TRAVELPAYOUTS_MARKER", raising=False)
+    monkeypatch.setenv("TRAVELPAYOUTS_MARKER", "")
     factory = init_db(get_settings())
     with session_scope(factory) as session:
         run = SearchRun(status="completed", accepted_count=0, rejected_count=47)

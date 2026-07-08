@@ -285,11 +285,18 @@ button.secondary, .button.secondary { background: #e8f1f0; color: var(--primary-
 .price-block { text-align: right; min-width: 8rem; justify-self: end; }
 .price-block strong { display: block; font-size: 1.35rem; }
 .price-block span { color: var(--muted); font-size: .86rem; }
+.deal-route {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .35rem;
+  justify-self: center;
+  min-width: min(26rem, 100%);
+}
 .deal-timeline {
   display: flex;
   align-items: center;
   gap: .5rem;
-  justify-self: center;
 }
 .deal-timeline-point {
   display: flex;
@@ -330,6 +337,47 @@ button.secondary, .button.secondary { background: #e8f1f0; color: var(--primary-
   font-size: .68rem;
   color: var(--muted);
   vertical-align: super;
+}
+.bus-stopover-list {
+  display: grid;
+  gap: .35rem;
+  min-width: min(34rem, 100%);
+}
+.bus-stopover-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem .45rem;
+  padding: .42rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf9;
+  color: var(--muted);
+  font-size: .75rem;
+  line-height: 1.25;
+  box-shadow: 0 1px 2px rgba(20, 35, 45, .04);
+}
+.bus-stopover-row strong {
+  color: var(--text);
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+}
+.bus-stopover-row span {
+  white-space: nowrap;
+}
+.bus-stopover-row.muted {
+  background: #fbfbfa;
+}
+.bus-stopover-index {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: .12rem .42rem;
+  border-radius: 999px;
+  background: #e8f1f0;
+  color: var(--primary);
+  font-weight: 750;
 }
 .deal-footer {
   display: flex;

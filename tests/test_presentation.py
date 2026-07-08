@@ -1,9 +1,12 @@
+import json
+import zlib
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 from travel_scrapping.web.presentation import (
     airlines_display,
     booking_display,
+    bus_route_details,
     date_time,
     destination_display,
     operator_display,
@@ -68,3 +71,73 @@ def test_warnings_translated_to_french():
 def test_missing_travelpayouts_marker_link_explained():
     deal = SimpleNamespace(booking_url=None, warnings_json='["travelpayouts marker missing"]')
     assert booking_display(deal) == "Lien indisponible : TRAVELPAYOUTS_MARKER manquant"
+
+
+def test_bus_route_details_extracts_stations_segments_and_stopover():
+    payload = {
+        "legs": [
+            {
+                "departure_station_name": "Nice Aéroport",
+                "arrival_station_name": "Milan Lampugnano",
+                "departure_at": "2026-07-02T08:00:00",
+                "arrival_at": "2026-07-02T13:30:00",
+            },
+            {
+                "departure_station_name": "Milan Lampugnano",
+                "arrival_station_name": "Venise Tronchetto",
+                "departure_at": "2026-07-02T14:15:00",
+                "arrival_at": "2026-07-02T17:45:00",
+            },
+        ]
+    }
+    deal = SimpleNamespace(
+        transport_mode="bus",
+        raw_payload_z=zlib.compress(json.dumps(payload).encode()),
+        origin_airport="NCE",
+        destination_airport="VCE",
+        destination_city="Venise",
+    )
+
+    details = bus_route_details(deal)
+
+    assert details["origin_station"] == "Nice Aéroport"
+    assert details["destination_station"] == "Venise Tronchetto"
+    assert details["segments"][0]["duration_minutes"] == 330
+    assert details["segments"][1]["duration_minutes"] == 210
+    assert details["stopovers"] == [
+        {
+            "index": 1,
+            "station": "Milan Lampugnano",
+            "arrival_at": datetime(2026, 7, 2, 13, 30),
+            "departure_at": datetime(2026, 7, 2, 14, 15),
+            "duration_minutes": 45,
+            "inbound_duration_minutes": 330,
+            "outbound_duration_minutes": 210,
+        }
+    ]
+
+
+def test_bus_route_details_uses_station_names_and_marks_unknown_stopover_details():
+    payload = {
+        "departure_station_name": "Nice Vauban",
+        "arrival_station_name": "Venise Tronchetto",
+        "stopover_details_available": False,
+    }
+    deal = SimpleNamespace(
+        transport_mode="bus",
+        raw_payload_z=zlib.compress(json.dumps(payload).encode()),
+        destination_airport="VCE",
+        destination_city="Venise",
+        outbound_departure_at=datetime(2026, 7, 2, 8, 0),
+        outbound_arrival_at=datetime(2026, 7, 2, 17, 45),
+        duration_minutes=585,
+        stops_count=1,
+    )
+
+    details = bus_route_details(deal)
+
+    assert details["origin_station"] == "Nice Vauban"
+    assert details["destination_station"] == "Venise Tronchetto"
+    assert details["segments"][0]["departure_station"] == "Nice Vauban"
+    assert details["segments"][0]["arrival_station"] == "Venise Tronchetto"
+    assert details["unavailable_stopovers"] == 1

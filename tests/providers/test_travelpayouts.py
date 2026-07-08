@@ -44,6 +44,29 @@ def test_parse_travelpayouts_payload():
     assert deals[0].booking_url == "https://example.test/book"
 
 
+def test_parse_travelpayouts_payload_builds_deep_link_from_marker():
+    deals = parse_travelpayouts_payload(
+        {
+            "data": [
+                {
+                    "destination": "BCN",
+                    "depart_date": "2026-07-01",
+                    "return_date": "2026-07-04",
+                    "value": 45,
+                    "gate": "Farera",
+                }
+            ]
+        },
+        origin="NCE",
+        marker="123456",
+    )
+    deal = deals[0]
+    assert deal.booking_url == "https://www.aviasales.com/search/NCE0107BCN04071?marker=123456"
+    assert deal.airlines == ["Farera"]
+    assert "operator is booking site (gate), not confirmed airline" in deal.warnings
+    assert deal.actionable
+
+
 def test_parse_travelpayouts_payload_missing_marker_adds_warning():
     deals = parse_travelpayouts_payload(
         {"data": [{"destination": "BTS", "depart_date": "2026-07-02", "return_date": "2026-07-06", "value": 55}]},

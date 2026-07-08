@@ -73,6 +73,7 @@ templates.env.filters["warnings_display"] = presentation.warnings_display
 templates.env.filters["booking_display"] = presentation.booking_display
 templates.env.filters["mode_display"] = presentation.mode_display
 templates.env.filters["duration_display"] = presentation.duration_display
+templates.env.filters["bus_route_details"] = presentation.bus_route_details
 templates.env.filters["provider_status_display"] = presentation.provider_status_display
 templates.env.filters["date_time"] = presentation.date_time
 templates.env.filters["clock_display"] = presentation.clock_display

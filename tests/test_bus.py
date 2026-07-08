@@ -276,6 +276,17 @@ def test_comparabus_price_parser_requires_redirect_link():
     assert offers[0].price_amount == 9.98
     assert offers[0].booking_url.startswith("https://www.comparabus.com/fr/redirect?")
     assert "link=uid%3Ddirect%253A1%26hash%3Dx" in offers[0].booking_url
+    assert offers[0].raw_payload["departure_station_name"] == "Paris"
+    assert offers[0].raw_payload["arrival_station_name"] == "Lille"
+    assert offers[0].raw_payload["legs"] == [
+        {
+            "departure_station_name": "Paris",
+            "arrival_station_name": "Lille",
+            "departure_at": "2026-07-30 03:25:00",
+            "arrival_at": "2026-07-30 06:30:00",
+            "duration_minutes": 185,
+        }
+    ]
 
 
 def test_comparabus_booking_url_missing_link_is_not_actionable():

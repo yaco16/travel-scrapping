@@ -209,10 +209,46 @@ def _parse_price_rows(
                 stops_count=int(row.get("connection") or 0),
                 booking_url=booking_url,
                 confidence="medium",
-                raw_payload=scrub_payload(row),
+                raw_payload=_route_payload(row, origin=origin, destination=destination),
             )
         )
     return offers
+
+
+def _route_payload(row: dict[str, Any], *, origin: dict[str, Any], destination: dict[str, Any]) -> dict[str, Any]:
+    payload = scrub_payload(row)
+    departure_station = str(
+        row.get("depStopName")
+        or row.get("departure_station_name")
+        or row.get("stopNameDep")
+        or origin.get("name")
+        or ""
+    )
+    arrival_station = str(
+        row.get("arrStopName")
+        or row.get("arrival_station_name")
+        or row.get("stopNameArr")
+        or destination.get("name")
+        or ""
+    )
+    payload["departure_station_name"] = departure_station
+    payload["arrival_station_name"] = arrival_station
+    payload["legs"] = [
+        {
+            "departure_station_name": departure_station,
+            "arrival_station_name": arrival_station,
+            "departure_at": row.get("depDatetime"),
+            "arrival_at": row.get("arrDatetime"),
+            "duration_minutes": row.get("duration"),
+        }
+    ]
+    try:
+        connections = int(row.get("connection") or 0)
+    except (TypeError, ValueError):
+        connections = 0
+    if connections > 0:
+        payload["stopover_details_available"] = False
+    return payload
 
 
 def _parse_comparabus_datetime(value: Any) -> datetime | None:

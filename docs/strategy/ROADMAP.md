@@ -28,7 +28,7 @@ Smoke reel Deals strict NCE ete 2026: HTTP 200 `Success`, 0 cle `deals`, raw 0. 
 
 ## Prochaine tranche
 
-- Etape 01 - Smoke live Ryanair depuis NCE : lancer `search --modes flight` et verifier resultats ryanair dans diagnostics.
-- Etape 02 - Creer compte Amadeus (`developers.amadeus.com`), renseigner `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` dans `.env`, smoke live.
+- Etape 01 - Smoke live Ryanair depuis NCE : fait, resultats reels obtenus (cf. TODO.md).
+- Etape 02 - Abandonnee : Amadeus non configure sur decision utilisateur (API bientot retiree). Travelpayouts configure a la place (token + marker, deep link Aviasales construit cote code) : offres reelles actionables en live (cf. TODO.md).
 - Etape 03 - FlixBus Open API : trouver un lien réservation contractuel dans payload/API ou basculer sur fournisseur bus contractuel. Garder 0 offre tant que lien réservation explicite absent.
 - Etape 04 - Demander acces demo/sandbox `Distribusion` et documentation/API contractuelle.

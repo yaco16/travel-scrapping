@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -81,6 +83,16 @@ def _extract_booking_url(row: dict[str, Any], marker: str | None) -> str | None:
     return None
 
 
+def build_aviasales_deep_link(
+    *, marker: str, origin: str, destination: str, depart: date, ret: date
+) -> str:
+    """Aviasales search deep link, per Travelpayouts affiliate link format."""
+    return (
+        f"https://www.aviasales.com/search/{origin}{depart:%d%m}{destination}{ret:%d%m}1"
+        f"?marker={quote(marker)}"
+    )
+
+
 def parse_travelpayouts_payload(payload: dict[str, Any], *, origin: str, marker: str | None = None) -> list[DealCandidate]:
     deals: list[DealCandidate] = []
     for row in payload.get("data", []):
@@ -95,9 +107,21 @@ def parse_travelpayouts_payload(payload: dict[str, Any], *, origin: str, marker:
             return_date = parse_date(ret)
             airlines = _extract_airlines(row)
             warnings = ["cached or indicative fare; verify before booking"]
+            gate = row.get("gate")
             if not airlines:
                 warnings.append("airline missing from source")
+                if isinstance(gate, str) and gate:
+                    airlines = [gate]
+                    warnings.append("operator is booking site (gate), not confirmed airline")
             booking_url = _extract_booking_url(row, marker)
+            if not booking_url and marker:
+                booking_url = build_aviasales_deep_link(
+                    marker=marker,
+                    origin=origin,
+                    destination=str(row["destination"]),
+                    depart=outbound,
+                    ret=return_date,
+                )
             if not booking_url and not marker:
                 warnings.append("travelpayouts marker missing")
             deals.append(
