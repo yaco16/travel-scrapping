@@ -45,7 +45,7 @@
     {% for deal in deals %}
     <article class="deal-card {{ 'best' if deal.total_price_eur == best_price else '' }}">
       <div class="deal-main">
-        <div>
+        <div class="deal-info">
           <div class="badge-row">
             <span class="badge">{{ deal.transport_mode|mode_display }}</span>
             <span class="badge muted">{{ deal.confidence }}</span>
@@ -53,8 +53,8 @@
           </div>
           <h3><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a>{% if deal.destination_country %}<span class="destination-country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h3>
           <p>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits</p>
-          {% include "_deal_timeline.html" %}
         </div>
+        {% include "_deal_timeline.html" %}
         <div class="price-block">
           <strong>{{ deal.total_price_eur|price_display }}</strong>
           <span>{{ deal.stops_count if deal.stops_count is not none else 0 }} escale(s)</span>
