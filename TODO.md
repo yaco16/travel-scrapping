@@ -1,5 +1,12 @@
 # TODO
 
+## Corrections faites (2026-07-08, affichage progressif + frise horaire)
+
+- Affichage progressif : `run_search()` (`engine.py`) n'ecrivait les offres en base qu'une seule fois, tout a la fin, dans une seule transaction — `/results` restait donc vide jusqu'a la fin de la recherche malgre le rafraichissement toutes les 5s. Corrige : nouveau helper `replace_run_deals()` (`db.py`) appele apres chaque lot de provider (vols, Distribusion, chaque provider bus), qui recalcule et commite le meilleur top-N connu a cet instant. Le `<meta http-equiv="refresh">` est remplace par du polling htmx (`hx-trigger="every 2s"` sur `#live-region` dans `results.html`), qui s'arrete automatiquement une fois le run termine. `GET /results` rend desormais toujours la page complete (suppression de la branche `_results_offers.html`-seul sur header `HX-Request`, devenue inutile car `hx-select` decoupe cote client).
+- Frise horaire sur chaque vignette (`_deal_timeline.html`, inclus dans `_results_offers.html`) : depart -> escale(s) -> arrivee. Nouveaux champs `outbound_departure_at`/`outbound_arrival_at` sur `DealCandidate`/`Deal` (colonnes nullable ajoutees via `migrate_sqlite`), renseignes uniquement quand la donnee source existe reellement (`Offer.to_deal_candidate()` : depart = `departure_at`, arrivee = `departure_at + duration_minutes`). Seul `comparabus` fournit une heure de depart + duree reelles aujourd'hui ; Ryanair/Amadeus/Travelpayouts n'ont que des dates. La frise degrade proprement vers "Horaire non communique" et n'affiche jamais de duree d'escale inventee (`max_layover_hours` n'est fourni par aucun provider) — conforme a la regle AGENTS.md "ne jamais inventer".
+- Verifie manuellement en local (serveur uvicorn + lignes `Deal` injectees) : run pending -> `hx-trigger` present, run terminal -> absent ; offre bus avec heures reelles -> frise avec heures + badge "+1" si arrivee le lendemain ; offre vol sans heure -> "Horaire non communique" sans invention.
+- Checks : `pytest` (suite complete, 356 tests), `ruff check .`, `pyright` (repo entier) tous verts.
+
 ## Workflow git (2026-07-08)
 
 - Fin du workflow branche/PR : branche `agent/travel-search-fixes` (fixes providers/UI + fix fixture bus) fusionnée directement dans `main` (fast-forward) et poussée. Branche supprimée en local et sur `origin`. Il ne reste que `main`.
