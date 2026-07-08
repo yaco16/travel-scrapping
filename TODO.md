@@ -1,5 +1,12 @@
 # TODO
 
+## Corrections faites (2026-07-08, Ryanair zero résultat + frise centrée)
+
+- Bug racine "l'avion ne renvoie aucun résultat" : `RyanairProvider` (`ryanair.py`) envoyait `limit=min(settings.top_results_limit, 100)` (50 par défaut) à `roundTripFares` v4, mais cette API renvoie HTTP 400 `InvalidLimit` dès que `limit > 20` (vérifié en direct par curl : 200 jusqu'à 20, 400 à partir de 21). Toutes les requêtes Ryanair échouaient donc silencieusement. Corrigé : nouvelle constante `RYANAIR_MAX_LIMIT = 20`, `limit=min(limit, RYANAIR_MAX_LIMIT)`. Vérifié en live avec les critères exacts rapportés (NCE, 1-7 nuits, 10 juil-31 août, ≤150€, 1 escale max) : Ryanair passe de HTTP 400/0 résultat à HTTP 200/2 offres réelles.
+- Écart restant avec Google Flights (21 offres vs quelques offres ici) : structurel, pas un bug — nos providers actifs sont Ryanair (fare-finder low-cost, réseau limité depuis NCE) et SerpApi `google_flights_deals` (flux "deals" curé, pas une recherche flexible exhaustive comme l'UI Google Flights). Amadeus (clés absentes) et Travelpayouts (marker absent) sont désactivés et combleraient une partie de l'écart une fois configurés (cf. actions restantes).
+- Frise horaire (vignette résultats) déplacée au centre géométrique de la carte via `display: grid; grid-template-columns: 1fr auto 1fr` au lieu de ratios flex, qui la faisaient dériver à droite selon la largeur du nom de destination.
+- Checks : `pytest` (suite complète), `ruff check .`, `pyright` (repo entier) tous verts.
+
 ## Corrections faites (2026-07-08, affichage progressif + frise horaire)
 
 - Affichage progressif : `run_search()` (`engine.py`) n'ecrivait les offres en base qu'une seule fois, tout a la fin, dans une seule transaction — `/results` restait donc vide jusqu'a la fin de la recherche malgre le rafraichissement toutes les 5s. Corrige : nouveau helper `replace_run_deals()` (`db.py`) appele apres chaque lot de provider (vols, Distribusion, chaque provider bus), qui recalcule et commite le meilleur top-N connu a cet instant. Le `<meta http-equiv="refresh">` est remplace par du polling htmx (`hx-trigger="every 2s"` sur `#live-region` dans `results.html`), qui s'arrete automatiquement une fois le run termine. `GET /results` rend desormais toujours la page complete (suppression de la branche `_results_offers.html`-seul sur header `HX-Request`, devenue inutile car `hx-select` decoupe cote client).
@@ -34,7 +41,7 @@
 - Cache `flixbus_city_ids.json` incomplet/errone (trouve par investigation) : sur 20 destinations, `Athens`, `Marrakech`, `Tunis` sans entree cache, et `Malta` mappe a tort vers `Chemult, OR` (bug de selection dans `flixbus_autocomplete.py`, `select_unique_mapping`). Pas encore corrige — a traiter dans une prochaine tranche.
 - `flixbus` RapidAPI renvoie `429 Too many requests` : quota externe, rien a corriger cote code aujourd'hui.
 - `comparabus` : `HTTP 200 ok=1 raw_count=0` peut aussi refleter un vrai "0 route" par destination (donnee externe), a confirmer apres le fix d'agregation.
-- Étape 01 - Smoke live Ryanair : lancer `rtk run '.venv/bin/python -m travel_scrapping.cli search --modes flight'` et verifier resultats dans diagnostics (a refaire avec le fix de date).
-- Étape 02 - Creer compte Amadeus sur `developers.amadeus.com`, copier `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` dans `.env`, smoke live.
+- Étape 01 - Smoke live Ryanair : fait, Ryanair renvoie des résultats réels (cf. section du jour). Reste à surveiller si l'API resserre encore la limite.
+- Étape 02 - Creer compte Amadeus sur `developers.amadeus.com`, copier `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` dans `.env`, smoke live — rapprocherait la couverture vols de celle de Google Flights.
 - Étape 03 - FlixBus : chercher un lien réservation contractuel pour les résultats OpenAPI ou passer par fournisseur bus contractuel. Garder 0 offre tant qu'aucun lien réservation explicite n'est présent.
 - Étape 04 - Demander acces demo/sandbox `Distribusion` et documentation/API contractuelle.
