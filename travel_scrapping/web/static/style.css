@@ -277,20 +277,19 @@ button.secondary, .button.secondary { background: #e8f1f0; color: var(--primary-
 .results-list { display: grid; gap: .75rem; }
 .deal-card { padding: .9rem; }
 .deal-card.best { border-color: var(--success-line); background: var(--success-bg); }
-.deal-main { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
-.deal-info { flex: 1; min-width: 0; }
+.deal-main { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; }
+.deal-info { min-width: 0; }
 .deal-main h3 { margin-top: .55rem; }
 .deal-main p { color: var(--muted); margin-bottom: 0; }
 .destination-country { color: var(--muted); font-weight: 500; }
-.price-block { text-align: right; min-width: 8rem; }
+.price-block { text-align: right; min-width: 8rem; justify-self: end; }
 .price-block strong { display: block; font-size: 1.35rem; }
 .price-block span { color: var(--muted); font-size: .86rem; }
 .deal-timeline {
   display: flex;
   align-items: center;
   gap: .5rem;
-  flex: 1.2;
-  min-width: 0;
+  justify-self: center;
 }
 .deal-timeline-point {
   display: flex;
@@ -535,9 +534,9 @@ th { color: var(--muted); font-size: .86rem; }
   .deal-detail-hero, .detail-grid { grid-template-columns: 1fr; }
   .deal-detail-copy { min-height: 180px; }
   .detail-facts, .price-timeline div { grid-template-columns: 1fr; }
-  .deal-main { flex-direction: column; align-items: stretch; }
-  .deal-timeline { margin-top: .6rem; }
-  .price-block { text-align: left; }
+  .deal-main { grid-template-columns: 1fr; justify-items: stretch; }
+  .deal-timeline { justify-self: stretch; margin-top: .6rem; }
+  .price-block { text-align: left; justify-self: stretch; }
   .operator-pill { margin-left: 0; }
   .run-facts div { grid-template-columns: 1fr; gap: .2rem; }
 }
