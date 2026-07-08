@@ -33,7 +33,7 @@ def test_key_ui_elements_exist_in_templates():
     home, _, _ = templates.env.loader.get_source(templates.env, "home.html")
     base, _, _ = templates.env.loader.get_source(templates.env, "base.html")
 
-    assert "results-hero" in results
+    assert "page-hero" in results
     assert "metric-card" in results
     assert "offres affichées sur" in offers
     assert "Meilleur prix" in offers

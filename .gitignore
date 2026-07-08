@@ -14,3 +14,5 @@ data/*.sqlite
 data/*.sqlite3
 data/debug/
 data/sources/
+data/cache/
+data/gtfs/

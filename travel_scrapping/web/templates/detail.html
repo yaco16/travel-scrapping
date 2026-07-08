@@ -1,12 +1,98 @@
 {% extends "base.html" %}
 {% block content %}
 {% if deal %}
-<h1>{{ deal.destination_display_name or deal|destination_display }}</h1>
-<p>{{ deal.outbound_date }} - {{ deal.return_date }} · {{ deal.total_price_eur }} EUR · {{ deal.source }}</p>
-<h2>Historique prix</h2>
-<ul>{% for obs in history %}<li>{{ obs.observed_at }} · {{ obs.price_eur }} EUR · {{ obs.source }}</li>{% endfor %}</ul>
-<p>{{ deal.warnings_json }}</p>
+<section class="deal-detail-hero">
+  <div class="deal-detail-copy">
+    <div class="badge-row">
+      <span class="badge">{{ deal.transport_mode|mode_display }}</span>
+      <span class="badge muted">{{ deal.confidence }}</span>
+      {% if deal.actionable %}<span class="badge best-badge">Réservable</span>{% endif %}
+    </div>
+    <p class="eyebrow">Détail offre</p>
+    <h1>{{ deal.destination_display_name or deal|destination_display }}{% if deal.destination_country %}<span class="destination-country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h1>
+    <p class="hero-subtitle">{{ deal.origin_airport }} → {{ deal.destination_airport }} · {{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits</p>
+  </div>
+  <aside class="deal-detail-price">
+    <span>Prix total</span>
+    <strong>{{ deal.total_price_eur|price_display }}</strong>
+    <p>{{ deal|operator_display }}</p>
+    {% if deal.booking_url %}
+    <a class="button" href="{{ deal.booking_url }}" target="_blank" rel="noreferrer">Ouvrir réservation</a>
+    {% else %}
+    <p class="booking-note">{{ deal|booking_display }}</p>
+    {% endif %}
+  </aside>
+</section>
+
+<div class="detail-grid">
+  <section class="panel detail-panel">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">Trajet</p>
+        <h2>Résumé</h2>
+      </div>
+      <span class="badge">Run #{{ deal.run_id }}</span>
+    </div>
+    <dl class="detail-facts">
+      <div><dt>Aller</dt><dd>{{ deal.outbound_date|short_date }}</dd></div>
+      <div><dt>Retour</dt><dd>{{ deal.return_date|short_date }}</dd></div>
+      <div><dt>Nuits</dt><dd>{{ deal.nights }}</dd></div>
+      <div><dt>Durée</dt><dd>{{ deal.duration_minutes|duration_display }}</dd></div>
+      <div><dt>Correspondances</dt><dd>{% if deal.stops_count is not none %}{{ deal.stops_count }}{% elif deal.is_direct %}Direct{% else %}Non communiqué{% endif %}</dd></div>
+      <div><dt>Provider</dt><dd>{{ deal.provider or deal.source }}</dd></div>
+      <div><dt>Récupéré</dt><dd>{{ deal.fetched_at|date_time }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel detail-panel">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">Qualité</p>
+        <h2>Signaux</h2>
+      </div>
+    </div>
+    <div class="signal-list">
+      <span>Prix moyen {% if deal.average_price %}{{ deal.average_price|price_display }}{% else %}non disponible{% endif %}</span>
+      <span>Remise {% if deal.discount_percent %}{{ deal.discount_percent|round|int }} %{% else %}non disponible{% endif %}</span>
+      <span>Lien {% if deal.booking_url %}présent{% else %}absent{% endif %}</span>
+    </div>
+    {% set warnings = deal.warnings_json|warnings_display %}
+    {% if warnings %}
+    <ul class="warning-list">
+      {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted-text">Aucun avertissement fournisseur.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="panel detail-panel">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">Historique prix</p>
+      <h2>{{ history|length }} observation{% if history|length > 1 %}s{% endif %}</h2>
+    </div>
+  </div>
+  {% if history %}
+  <div class="price-timeline">
+    {% for obs in history %}
+    <div>
+      <span>{{ obs.observed_at|date_time }}</span>
+      <strong>{{ obs.price_eur|price_display }}</strong>
+      <em>{{ obs.source }}</em>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted-text">Aucune observation historique valide pour cet itinéraire.</p>
+  {% endif %}
+</section>
 {% else %}
-<p>Deal introuvable.</p>
+<section class="panel detail-panel">
+  <h1>Deal introuvable</h1>
+  <p class="muted-text">Cette offre n’existe pas ou n’est plus disponible.</p>
+  <a class="button secondary" href="/results">Retour aux résultats</a>
+</section>
 {% endif %}
 {% endblock %}

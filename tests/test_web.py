@@ -51,7 +51,7 @@ def test_main_menu_hides_sqlite(tmp_path, monkeypatch):
     assert '<a href="/history">Historique</a>' in response.text
 
 
-def test_home_keeps_search_form_and_hides_travelpayouts_marker_warning(tmp_path, monkeypatch):
+def test_home_keeps_search_form_and_hides_provider_setup_warnings(tmp_path, monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
     monkeypatch.setenv("TRAVELPAYOUTS_TOKEN", "token")
@@ -63,6 +63,7 @@ def test_home_keeps_search_form_and_hides_travelpayouts_marker_warning(tmp_path,
     assert response.status_code == 200
     assert '<form action="/run" method="post" class="form-grid" data-run-form>' in response.text
     assert "Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant" not in response.text
+    assert "AMADEUS_CLIENT_ID/SECRET missing; Amadeus provider skipped." not in response.text
 
 
 def test_home_transport_picker_has_all_sync_script(tmp_path, monkeypatch):
@@ -530,7 +531,56 @@ def test_results_htmx_request_returns_offers_panel_only(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert response.text.lstrip().startswith('<div id="results-offers-panel">')
-    assert "results-hero" not in response.text
+    assert "page-hero" not in response.text
+
+
+def test_deal_detail_page_uses_polished_layout_without_raw_warnings(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=35)
+        session.add(run)
+        session.flush()
+        deal = Deal(
+            run_id=run.id,
+            source="comparabus",
+            transport_mode="bus",
+            provider="comparabus",
+            origin_airport="NCE",
+            destination_airport="9",
+            destination_city="Paris",
+            outbound_date=date(2026, 7, 8),
+            return_date=date(2026, 7, 11),
+            nights=3,
+            total_price=35,
+            currency="EUR",
+            total_price_eur=35,
+            airlines_json="[]",
+            operator_name="BlaBlaCar Bus",
+            booking_url="https://example.test/bus",
+            actionable=True,
+            confidence="medium",
+            warnings_json='["cached or indicative fare; verify before booking"]',
+            fetched_at=now,
+        )
+        session.add(deal)
+        session.flush()
+        deal_id = deal.id
+
+    client = TestClient(create_app())
+    response = client.get(f"/deal/{deal_id}")
+
+    assert response.status_code == 200
+    assert "deal-detail-hero" in response.text
+    assert "Prix total" in response.text
+    assert "Ouvrir réservation" in response.text
+    assert "Prix indicatif : à vérifier avant réservation" in response.text
+    assert "cached or indicative fare" not in response.text
+    assert "Paris" in response.text
+    assert "9 inconnu" not in response.text
 
 
 def test_history_shows_run_start_date_between_id_and_status(tmp_path, monkeypatch):

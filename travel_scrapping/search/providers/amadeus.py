@@ -120,13 +120,20 @@ class AmadeusProvider(FlightProvider):
             prefix="amadeus-inspire",
         )
 
-        deals = _parse_inspire(data, origin=self.settings.origin_airport)
+        deals = _parse_inspire(
+            data,
+            origin=self.settings.origin_airport,
+            min_nights=self.settings.min_nights,
+            max_nights=self.settings.max_nights,
+        )
         self.last_normalized_count = len(deals)
         self.last_destination_examples = [d.destination_airport for d in deals[:5]]
         return deals[:limit]
 
 
-def _parse_inspire(data: list[dict[str, Any]], *, origin: str) -> list[DealCandidate]:
+def _parse_inspire(
+    data: list[dict[str, Any]], *, origin: str, min_nights: int = 1, max_nights: int = 7
+) -> list[DealCandidate]:
     deals: list[DealCandidate] = []
     for item in data:
         try:
@@ -144,6 +151,8 @@ def _parse_inspire(data: list[dict[str, Any]], *, origin: str) -> list[DealCandi
             if price_val is None:
                 continue
             nights = (ret_date - out_date).days
+            if not min_nights <= nights <= max_nights:
+                continue
             booking_url = AMADEUS_BOOKING_TPL.format(
                 origin=origin, dest=dest, out=out_date.isoformat(), ret=ret_date.isoformat()
             )

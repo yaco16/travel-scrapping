@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
+<section class="page-hero">
   <div>
     <p class="eyebrow">Dashboard local</p>
     <h1>Vols pas chers depuis Nice</h1>
@@ -8,7 +8,7 @@
   </div>
 </section>
 
-{% for warning in warnings if "Travelpayouts désactivé" not in warning %}
+{% for warning in warnings if "Travelpayouts désactivé" not in warning and "AMADEUS_CLIENT_ID/SECRET missing" not in warning %}
 <p class="warning compact">{{ warning }}</p>
 {% endfor %}
 

@@ -60,6 +60,8 @@ class RyanairProvider(FlightProvider):
             "outboundDepartureDateTo": end.isoformat(),
             "inboundDepartureDateFrom": (start + timedelta(days=self.settings.min_nights)).isoformat(),
             "inboundDepartureDateTo": inbound_end.isoformat(),
+            "durationFrom": self.settings.min_nights,
+            "durationTo": self.settings.max_nights,
             "language": "fr",
             "limit": min(limit, 100),
             "maxPrice": int(self.settings.max_roundtrip_price_eur),

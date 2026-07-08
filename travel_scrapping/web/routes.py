@@ -227,10 +227,13 @@ def latest_display_deals(
         ),
     )
     for deal in deals:
-        airport = resolve_airport(deal.destination_airport, settings, session)
-        deal.destination_display_name = airport.info.display_name  # type: ignore[attr-defined]
-        if not deal.destination_country and airport.info.country:
-            deal.destination_country = airport.info.country
+        if deal.transport_mode == "bus":
+            deal.destination_display_name = deal.destination_city or f"{deal.destination_airport} inconnu"  # type: ignore[attr-defined]
+        else:
+            airport = resolve_airport(deal.destination_airport, settings, session)
+            deal.destination_display_name = airport.info.display_name  # type: ignore[attr-defined]
+            if not deal.destination_country and airport.info.country:
+                deal.destination_country = airport.info.country
         deal.provider_status = statuses.get(deal.provider or deal.source) or statuses.get(deal.source)  # type: ignore[attr-defined]
     return run, deals, statuses
 
@@ -577,9 +580,12 @@ def deal_detail(request: Request, deal_id: int):
         deal = session.get(Deal, deal_id)
         history = []
         if deal:
-            deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
-                deal.destination_airport, settings, session
-            ).info.display_name
+            if deal.transport_mode == "bus":
+                deal.destination_display_name = deal.destination_city or f"{deal.destination_airport} inconnu"  # type: ignore[attr-defined]
+            else:
+                deal.destination_display_name = resolve_airport(  # type: ignore[attr-defined]
+                    deal.destination_airport, settings, session
+                ).info.display_name
             route_key = f"{deal.origin_airport}-{deal.destination_airport}:{deal.outbound_date}:{deal.return_date}"
             history = list(
                 session.scalars(
