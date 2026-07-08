@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 
-from travel_scrapping.search.providers.ryanair import RyanairProvider, _parse_fares
+import pytest
+import respx
+from httpx import Response
+
+from travel_scrapping.search.providers.ryanair import RYANAIR_MAX_LIMIT, RyanairProvider, _parse_fares
 
 
 def _settings(**kwargs):
@@ -95,3 +99,17 @@ def test_status_disabled():
     s = _settings(ryanair_enabled=False)
     p = RyanairProvider(s)
     assert p.status().enabled is False
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_caps_requested_limit_to_ryanair_max():
+    route = respx.get("https://services-api.ryanair.com/farfnd/v4/roundTripFares").mock(
+        return_value=Response(200, json={"fares": []})
+    )
+    s = _settings(top_results_limit=50)
+    provider = RyanairProvider(s)
+
+    await provider.search([], [], limit=50)
+
+    assert route.calls.last.request.url.params["limit"] == str(RYANAIR_MAX_LIMIT)

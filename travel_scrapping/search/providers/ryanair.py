@@ -12,6 +12,7 @@ from travel_scrapping.search.normalizer import scrub_payload
 from travel_scrapping.search.providers.base import FlightProvider, ProviderStatus
 
 RYANAIR_FARES_URL = "https://services-api.ryanair.com/farfnd/v4/roundTripFares"
+RYANAIR_MAX_LIMIT = 20  # API returns HTTP 400 "InvalidLimit" above this value
 RYANAIR_BOOKING_URL = (
     "https://www.ryanair.com/fr/fr/trip/flights/select"
     "?adults=1&teens=0&children=0&infants=0"
@@ -63,7 +64,7 @@ class RyanairProvider(FlightProvider):
             "durationFrom": self.settings.min_nights,
             "durationTo": self.settings.max_nights,
             "language": "fr",
-            "limit": min(limit, 100),
+            "limit": min(limit, RYANAIR_MAX_LIMIT),
             "maxPrice": int(self.settings.max_roundtrip_price_eur),
             "offset": 0,
             "currency": self.settings.default_currency,
