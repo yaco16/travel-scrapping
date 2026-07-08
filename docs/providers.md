@@ -5,6 +5,7 @@
 | Provider | Classe | Usage | UI principale |
 | --- | --- | --- | --- |
 | `serpapi_google_flights_deals` | `primary` | Recherche destination libre via Google Flight Deals. Provider avion principal. Appel strict `google_flights_deals`, parser `deals` uniquement. | Oui si clé présente et clé `deals` exploitable. |
+| `ryanair` | `primary` | Vols low-cost via `farfnd/v4/roundTripFares`, sans clé. `limit` API plafonné à 20 (voir section dédiée) : au-delà, HTTP 400 et 0 offre. | Oui si activé, pas d'heures de vol (dates seules). |
 | `serpapi_google_flights` / `serpapi` | `detail_probe` | Probe ciblé destination précise, pas provider principal pour `anywhere`. | Non, diagnostics avancés seulement. |
 | `travelpayouts` | `optional` | Prix indicatifs/cachés. Désactivé si `TRAVELPAYOUTS_MARKER` absent. | Non si marker absent ou aucune offre actionnable. |
 | `comparabus` | `optional` | Bus via API publique ComparaBUS: stops, routes, prix, redirect affilié. | Oui seulement si stop non ambigu, route bus, prix et lien redirect explicite. |
@@ -120,6 +121,20 @@ Utile pour le rail, surtout comme standard d'échange. Pour ce MVP, à privilég
 Smoke réel SerpApi, endpoint `google_travel_explore`, variantes datées `2026-07-16/2026-07-23`, `2026-07-21/2026-07-28`, `2026-08-28/2026-08-31`, `2026-07-01/2026-07-08`: HTTP 200, `search_metadata.status=Success`, top-level keys `search_metadata`, `search_parameters`, `search_information`, `error`, aucune clé `destinations` ou `flights`, 0 brut, SVQ/STN/FCO absents. Erreur SerpApi: `Empty results for departure_id: "NCE".`
 
 Décision: ne pas intégrer `google_travel_explore` comme provider.
+
+## Ryanair
+
+Provider avion `ryanair` (`travel_scrapping/search/providers/ryanair.py`), sans clé, activé par défaut (`RYANAIR_ENABLED`).
+
+Endpoint: `GET https://services-api.ryanair.com/farfnd/v4/roundTripFares`.
+
+Paramètres envoyés: `departureAirportIataCode`, `outboundDepartureDateFrom/To`, `inboundDepartureDateFrom/To` (bornées par `min_nights`/`max_nights` autour de la fenêtre de recherche), `durationFrom`/`durationTo` (= `min_nights`/`max_nights`, ajoutés pour éviter que l'API renvoie des couples aller/retour hors de la plage de nuits demandée), `language=fr`, `limit`, `maxPrice`, `offset=0`, `currency`.
+
+**Bug trouvé et corrigé le 2026-07-08** : `limit` était envoyé comme `min(settings.top_results_limit, 100)`, soit 50 par défaut. L'API rejette silencieusement toute valeur de `limit` supérieure à 20 avec `HTTP 400 {"code":"InvalidLimit","message":"Invalid limit"}`. Résultat : **toutes** les requêtes Ryanair échouaient depuis l'ajout du provider (024), donnant 0 offre avion en pratique quel que soit le budget/dates demandés. Vérifié en direct par curl sur l'endpoint réel : `limit<=20` → HTTP 200, `limit>=21` → HTTP 400, quel que soit `maxPrice`/`durationFrom`/`durationTo`. Corrigé par une constante `RYANAIR_MAX_LIMIT = 20` et `limit=min(limit, RYANAIR_MAX_LIMIT)`.
+
+Comportement observé même après correction : sur NCE avec une fenêtre de dates large (ex. 10 juil.-31 août, 1-7 nuits, ≤150€), l'endpoint ne renvoie que quelques offres (`size` dans la réponse, ex. 2), y compris en relâchant `maxPrice` ou en retirant `durationFrom`/`durationTo`. L'endpoint semble renvoyer au plus une poignée de meilleures offres par destination sur toute la fenêtre demandée, pas une liste exhaustive par date — c'est structurel côté API, pas un bug du provider. Ça explique une partie de l'écart avec le nombre d'offres visibles sur l'UI Google Flights (qui agrège bien plus de compagnies/OTA).
+
+Parsing (`_parse_fares`) : `is_direct=True` toujours forcé (Ryanair via cet endpoint est présenté en direct uniquement), pas de correspondance/segment détaillé. Seule la date de départ/retour est disponible (`departureDate`), jamais d'heure — `outbound_departure_at`/`outbound_arrival_at` restent `None` pour ce provider (cf. frise horaire sur les vignettes, qui affiche alors "Horaire non communiqué").
 
 ## Google Flight Deals
 
