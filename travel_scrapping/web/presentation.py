@@ -56,6 +56,20 @@ def airlines_display(airlines_json: str | None) -> str:
     return ", ".join(airlines) if airlines else ""
 
 
+def operator_display(deal: Any) -> str:
+    operator_name = getattr(deal, "operator_name", None)
+    if operator_name:
+        return str(operator_name)
+    airlines = airlines_display(getattr(deal, "airlines_json", None))
+    if airlines:
+        return airlines
+    provider = getattr(deal, "provider", None)
+    if provider:
+        return str(provider)
+    source = getattr(deal, "source", None)
+    return str(source) if source else "Opérateur non communiqué"
+
+
 def warnings_display(warnings_json: str | None) -> list[str]:
     return [WARNING_LABELS.get(warning, warning) for warning in parse_json_list(warnings_json)]
 
@@ -92,7 +106,9 @@ def provider_status_display(status: Any | None) -> str:
 
 
 def budget_display(value: float | int | Decimal | None) -> str:
-    return format_price_fr(value, "EUR", diagnostic=True).replace(" €", " EUR")
+    if value is None:
+        return "Non disponible"
+    return f"{int(round(float(value))):,} EUR".replace(",", " ")
 
 
 def configuration_summary(settings: Any) -> str:

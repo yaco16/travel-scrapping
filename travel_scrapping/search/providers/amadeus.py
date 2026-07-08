@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -81,8 +81,8 @@ class AmadeusProvider(FlightProvider):
         if start is None and date_pairs:
             start = date_pairs[0][0]
         if start is None:
-            from datetime import date
             start = date.today()
+        start = max(start, date.today())
 
         params: dict[str, Any] = {
             "origin": self.settings.origin_airport,

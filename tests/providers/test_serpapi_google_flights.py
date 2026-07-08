@@ -205,6 +205,10 @@ def test_parse_google_flight_deals_fixture():
 @respx.mock
 async def test_google_flight_deals_provider_search_uses_strict_deals_params(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.current_search_date",
+        lambda: date(2026, 7, 8),
+    )
     route = respx.get("https://serpapi.com/search.json").mock(
         return_value=Response(
             200,
@@ -228,7 +232,7 @@ async def test_google_flight_deals_provider_search_uses_strict_deals_params(tmp_
     sent = route.calls[0].request.url.params
     assert sent["engine"] == "google_flights_deals"
     assert sent["departure_id"] == "NCE"
-    assert sent["outbound_date"] == "2026-07-01,2026-08-31"
+    assert sent["outbound_date"] == "2026-07-08,2026-08-31"
     assert sent["trip_length"] == "1,7"
     assert sent["max_price"] == "150"
     assert sent["stops"] == "2"
@@ -316,6 +320,57 @@ async def test_google_flight_deals_provider_http_200_error_sets_error_and_scrubs
     dumped = str(provider.last_public_params)
     assert "api_key" not in dumped
     assert provider.last_public_params["payload_diagnostic"]["error"] == "bad *** secret value"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_google_flight_deals_provider_http_400_keeps_diagnostic(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    respx.get("https://serpapi.com/search.json").mock(
+        return_value=Response(400, json={"error": "Invalid outbound_date"})
+    )
+    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
+
+    deals = await provider.search([], [], limit=10)
+
+    assert deals == []
+    assert provider.last_ok is False
+    assert provider.last_status_code == 400
+    assert provider.last_error == "Invalid outbound_date"
+    assert provider.last_public_params["diagnostic"] == "SerpApi appelé, HTTP 400: Invalid outbound_date"
+    assert provider.last_public_params["payload_diagnostic"]["error"] == "Invalid outbound_date"
+
+
+@pytest.mark.asyncio
+async def test_google_flight_deals_provider_skips_expired_date_range(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.current_search_date",
+        lambda: date(2026, 9, 1),
+    )
+    monkeypatch.setattr(
+        "travel_scrapping.search.providers.serpapi_google_flights.httpx.AsyncClient",
+        lambda timeout: pytest.fail("SerpApi should not be called with an expired date range"),
+    )
+    provider = SerpApiGoogleFlightDealsProvider(
+        Settings(
+            _env_file=None,
+            serpapi_api_key="secret",
+            search_start_date=date(2026, 7, 1),
+            search_end_date=date(2026, 8, 31),
+        )
+    )
+
+    deals = await provider.search([], [], limit=10)
+
+    assert deals == []
+    assert provider.last_attempted is True
+    assert provider.last_ok is False
+    assert provider.last_status_code is None
+    assert provider.last_public_params["outbound_date"] == "2026-09-01,2026-08-31"
+    assert provider.last_public_params["diagnostic"] == (
+        "Plage de dates invalide: date départ max 2026-08-31 avant date départ min 2026-09-01."
+    )
 
 
 @pytest.mark.asyncio

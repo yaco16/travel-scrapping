@@ -18,6 +18,17 @@ Objectif : MVP local FastAPI pour rechercher et afficher offres de voyage depuis
 
 Ne pas creer de fichier d'etat parallele a `ROADMAP.md`.
 
+## Memo fin de requete
+
+A la fin de chaque requete utilisateur traitee, mettre a jour le bon memo avant de repondre :
+
+- `TODO.md` : corrections faites, actions immediates restantes, blocages concrets.
+- `docs/strategy/ROADMAP.md` : etat courant, limite atteinte, prochaine tranche si cela change.
+- `docs/tasks/active/` : suivi detaille uniquement pour une tranche active existante.
+- `docs/tasks/archive/` : rapport final uniquement quand une tranche est terminee/archivee.
+
+Ne pas creer de memo parallele. Si rien n'a change cote suivi, ne pas modifier les fichiers et le signaler brievement dans le rapport final.
+
 ## Reprise nouvelle conversation
 
 Si un rapport Claude/Codex est colle au debut :

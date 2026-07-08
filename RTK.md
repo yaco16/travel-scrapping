@@ -1,1 +1,1 @@
-/home/yaco/.agents/RTK.md
+/home/yaco/.codex/RTK.md

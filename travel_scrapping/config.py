@@ -4,7 +4,7 @@ from datetime import date
 from functools import lru_cache
 from typing import Any
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,12 +20,12 @@ class Settings(BaseSettings):
     default_currency: str = "EUR"
     default_locale: str = "fr-FR"
     default_market: str = "FR"
-    search_start_date: date | None = date(2026, 7, 1)
+    search_start_date: date | None = Field(default_factory=date.today)
     search_end_date: date = date(2026, 8, 31)
     date_to: date | None = None
     min_nights: int = 1
     max_nights: int = 7
-    max_roundtrip_price_eur: float = 150
+    max_roundtrip_price_eur: int = 150
     max_stops: int = 1
     max_air_time_hours: float = 5
     max_layover_hours: float = 3
@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     distribusion_api_key: str = ""
     distribusion_base_url: str = ""
     distribusion_partner_id: str = ""
+    comparabus_enabled: bool = True
+    comparabus_base_url: str = "https://www.comparabus.com"
     ryanair_enabled: bool = True
     amadeus_client_id: str = ""
     amadeus_client_secret: str = ""

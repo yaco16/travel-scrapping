@@ -29,7 +29,13 @@
       <label>Nuits max <input name="max_nights" value="{{ default_config.max_nights }}"></label>
       <label>Prix max <input name="max_price" value="{{ default_config.budget_eur }}"></label>
       <label>Correspondances max <input name="max_stops" value="{{ default_config.max_stops }}"></label>
-      <input name="modes" type="hidden" value="{{ default_config.modes or 'flight' }}">
+      <fieldset class="mode-picker" data-mode-picker>
+        <legend>Transport</legend>
+        <label><input name="modes" type="checkbox" value="flight" data-mode-option {{ 'checked' if default_config.modes == 'all' or 'flight' in default_config.modes else '' }}> Avion</label>
+        <label><input name="modes" type="checkbox" value="bus" data-mode-option {{ 'checked' if default_config.modes == 'all' or 'bus' in default_config.modes else '' }}> Bus</label>
+        <label><input name="modes" type="checkbox" value="train" data-mode-option {{ 'checked' if default_config.modes == 'all' or 'train' in default_config.modes else '' }}> Train</label>
+        <label><input name="modes" type="checkbox" value="all" data-mode-all {{ 'checked' if default_config.modes == 'all' else '' }}> Tous</label>
+      </fieldset>
       <button type="submit" data-run-submit>Lancer recherche</button>
     </form>
   </section>
@@ -60,7 +66,13 @@
         <input name="max_nights" type="hidden" value="{{ run_config.max_nights }}">
         <input name="max_price" type="hidden" value="{{ run_config.budget_eur }}">
         <input name="max_stops" type="hidden" value="{{ run_config.max_stops }}">
-        <input name="modes" type="hidden" value="{{ run_config.modes or 'flight' }}">
+        <fieldset class="mode-picker compact" data-mode-picker>
+          <legend>Transport</legend>
+          <label><input name="modes" type="checkbox" value="flight" data-mode-option {{ 'checked' if run_config.modes == 'all' or 'flight' in run_config.modes else '' }}> Avion</label>
+          <label><input name="modes" type="checkbox" value="bus" data-mode-option {{ 'checked' if run_config.modes == 'all' or 'bus' in run_config.modes else '' }}> Bus</label>
+          <label><input name="modes" type="checkbox" value="train" data-mode-option {{ 'checked' if run_config.modes == 'all' or 'train' in run_config.modes else '' }}> Train</label>
+          <label><input name="modes" type="checkbox" value="all" data-mode-all {{ 'checked' if run_config.modes == 'all' else '' }}> Tous</label>
+        </fieldset>
         <button type="submit" class="secondary" data-run-submit>Relancer avec cette configuration</button>
       </form>
     </div>
@@ -94,6 +106,23 @@
 </section>
 
 <script>
+  document.querySelectorAll("[data-mode-picker]").forEach((picker) => {
+    const all = picker.querySelector("[data-mode-all]");
+    const options = Array.from(picker.querySelectorAll("[data-mode-option]"));
+    const syncAll = () => {
+      all.checked = options.every((option) => option.checked);
+    };
+    all.addEventListener("change", () => {
+      options.forEach((option) => {
+        option.checked = all.checked;
+      });
+    });
+    options.forEach((option) => {
+      option.addEventListener("change", syncAll);
+    });
+    syncAll();
+  });
+
   document.querySelectorAll("[data-run-form]").forEach((form) => {
     form.addEventListener("submit", () => {
       const button = form.querySelector("[data-run-submit]");

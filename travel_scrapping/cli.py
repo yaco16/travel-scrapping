@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import date
-from typing import cast
+from typing import Mapping, cast
 
 import typer
 from sqlalchemy import func, select
@@ -15,6 +15,13 @@ from travel_scrapping.airports import (
     resolve_airport,
 )
 from travel_scrapping.airports.ourairports import import_ourairports
+from travel_scrapping.bus.flixbus_autocomplete import (
+    autocomplete_city,
+    find_cached_mapping,
+    save_city_mapping,
+)
+from travel_scrapping.bus.flixbus_gtfs import gtfs_info, refresh_gtfs, search_stops
+from travel_scrapping.bus.flixbus_openapi import FlixBusOpenApiProvider
 from travel_scrapping.bus.flixbus_rapidapi import FlixBusRapidApiProvider
 from travel_scrapping.config import get_settings, safe_settings_dict
 from travel_scrapping.db import (
@@ -432,6 +439,202 @@ def flixbus_smoke(
         )
         if offer.raw_debug_path:
             typer.echo(f"json_debug={offer.raw_debug_path}")
+
+
+@app.command("flixbus-openapi-city-search")
+def flixbus_openapi_city_search(query: list[str] = typer.Option(..., "--query")) -> None:
+    settings = get_settings()
+    provider = FlixBusOpenApiProvider(settings)
+    status = provider.status()
+    if not status.enabled:
+        typer.echo("; ".join(status.warnings))
+        return
+
+    async def run() -> None:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            for value in query:
+                lookup = await provider.city_search(client, value)
+                typer.echo(f"requête_ville={json.dumps(lookup.params, ensure_ascii=False, sort_keys=True)}")
+                typer.echo(f"endpoint={lookup.endpoint}")
+                typer.echo(f"statut_http={lookup.status_code if lookup.status_code is not None else 'non disponible'}")
+                typer.echo(f"réponse_brute={lookup.raw_summary}")
+                typer.echo(f"city_id={lookup.city_id or 'absent'}")
+                typer.echo(f"legacy_id={lookup.legacy_id or 'absent'}")
+                typer.echo(f"id_kind={lookup.id_kind}")
+                typer.echo(f"error={scrub_text(lookup.error) if lookup.error else 'non disponible'}")
+                for row in lookup.results[:10]:
+                    typer.echo(
+                        f"- id={row.get('id') or 'absent'} legacy_id={row.get('legacy_id') or 'absent'} "
+                        f"name={row.get('name') or row.get('city_name') or row.get('display_name') or 'non disponible'}"
+                    )
+
+    asyncio.run(run())
+
+
+@app.command("flixbus-gtfs-refresh")
+def flixbus_gtfs_refresh() -> None:
+    path = refresh_gtfs()
+    typer.echo(f"gtfs_zip={path}")
+    typer.echo("status=downloaded")
+
+
+@app.command("flixbus-gtfs-info")
+def flixbus_gtfs_info() -> None:
+    info = gtfs_info()
+    typer.echo(f"fichier={'present' if info.present else 'absent'}")
+    typer.echo(f"path={info.path}")
+    typer.echo(f"cache_downloaded_at={info.downloaded_at.isoformat() if info.downloaded_at else 'non disponible'}")
+    typer.echo(f"zip_size_bytes={info.size_bytes if info.size_bytes is not None else 'non disponible'}")
+    for name, present in info.files_present.items():
+        typer.echo(f"{name}={'present' if present else 'absent'}")
+    typer.echo(f"stops={info.stops_count}")
+    typer.echo(f"routes={info.routes_count}")
+    typer.echo(f"trips={info.trips_count}")
+    typer.echo(f"valid_from={info.valid_from or 'non disponible'}")
+    typer.echo(f"valid_until={info.valid_until or 'non disponible'}")
+    typer.echo("note=stop_id GTFS != legacy_id reservation")
+    if info.error:
+        typer.echo(f"error={scrub_text(info.error)}")
+    typer.echo("exemples_nice:")
+    for row in info.nice_examples:
+        typer.echo(_format_gtfs_stop(row))
+    typer.echo("exemples_paris:")
+    for row in info.paris_examples:
+        typer.echo(_format_gtfs_stop(row))
+
+
+@app.command("flixbus-gtfs-stop-search")
+def flixbus_gtfs_stop_search(query: str = typer.Option(..., "--query")) -> None:
+    info = gtfs_info()
+    if not info.present:
+        typer.echo("gtfs_zip=absent")
+        typer.echo("note=stop_id GTFS != legacy_id reservation")
+        return
+    stops = search_stops(query)
+    typer.echo(f"query={query}")
+    typer.echo(f"results={len(stops)}")
+    typer.echo("note=stop_id GTFS != legacy_id reservation")
+    for row in stops:
+        typer.echo(_format_gtfs_stop(row))
+
+
+@app.command("flixbus-autocomplete")
+def flixbus_autocomplete(query: str = typer.Option(..., "--query"), lang: str = typer.Option("fr", "--lang")) -> None:
+    diagnostic = asyncio.run(autocomplete_city(query, lang=lang))
+    typer.echo(f"endpoint={diagnostic.endpoint}")
+    typer.echo(f"params={json.dumps(diagnostic.params, ensure_ascii=False, sort_keys=True)}")
+    typer.echo(f"http_status={diagnostic.status_code if diagnostic.status_code is not None else 'non disponible'}")
+    typer.echo(f"raw_count={diagnostic.raw_count}")
+    typer.echo(f"ambiguous={str(diagnostic.ambiguous).lower()}")
+    typer.echo(f"selected_id={(diagnostic.selected or {}).get('id') or 'absent'}")
+    typer.echo(f"selected_legacy_id={(diagnostic.selected or {}).get('legacy_id') or 'absent'}")
+    typer.echo(f"error={scrub_text(diagnostic.error) if diagnostic.error else 'non disponible'}")
+    for row in diagnostic.results:
+        typer.echo(
+            " | ".join(
+                [
+                    f"name={row.get('name') or 'non disponible'}",
+                    f"legacy_id={row.get('legacy_id') or 'absent'}",
+                    f"id={row.get('id') or 'absent'}",
+                    f"slug={row.get('slug') or 'absent'}",
+                    f"country_code={row.get('country_code') or 'absent'}",
+                ]
+            )
+        )
+
+
+@app.command("flixbus-city-cache-set")
+def flixbus_city_cache_set(
+    query: str = typer.Option(..., "--query"),
+    id: str = typer.Option(..., "--id"),
+    legacy_id: str = typer.Option(..., "--legacy-id"),
+    name: str = typer.Option(..., "--name"),
+    slug: str = typer.Option("", "--slug"),
+    country_code: str = typer.Option("", "--country-code"),
+) -> None:
+    mapping = save_city_mapping(query=query, id=id, legacy_id=legacy_id, name=name, slug=slug, country_code=country_code)
+    typer.echo(
+        f"stored=true query={mapping['query']} id={mapping['id']} "
+        f"legacy_id={mapping['legacy_id']} name={mapping['name']}"
+    )
+
+
+@app.command("smoke-flixbus-openapi")
+def smoke_flixbus_openapi(
+    from_: str = typer.Option("Nice", "--from", "--origin"),
+    to: str = typer.Option("Paris", "--to", "--destination"),
+    depart: str = typer.Option("2026-07-30", "--depart"),
+    return_: str = typer.Option("2026-08-02", "--return"),
+    try_legacy_id: bool = typer.Option(False, "--try-legacy-id"),
+) -> None:
+    settings = get_settings()
+    provider = FlixBusOpenApiProvider(settings)
+    status = provider.status()
+    typer.echo("etape_gtfs=stop_search")
+    info = gtfs_info()
+    if info.present:
+        typer.echo(f"gtfs_from_matches={len(search_stops(from_))}")
+        typer.echo(f"gtfs_to_matches={len(search_stops(to))}")
+    else:
+        typer.echo("gtfs_zip=absent")
+    typer.echo("note=stop_id GTFS != legacy_id reservation")
+    if status.enabled and try_legacy_id:
+        offers = asyncio.run(provider.search_roundtrip(from_, to, depart, return_, use_legacy_id=True))
+    else:
+        offers = asyncio.run(provider.search_roundtrip(from_, to, depart, return_)) if status.enabled else []
+    typer.echo(f"provider={provider.name}")
+    typer.echo(f"enabled={str(status.enabled).lower()}")
+    typer.echo(f"attempted={str(provider.last_attempted).lower()}")
+    typer.echo("etape_autocomplete=id_lookup")
+    if provider.last_city_lookups:
+        origin_lookup = provider.last_city_lookups[0]
+        typer.echo(f"lookup_source_départ={origin_lookup.source}")
+        typer.echo(f"requête_ville_départ={json.dumps(origin_lookup.params, ensure_ascii=False, sort_keys=True)}")
+        typer.echo(f"réponse_ville_départ={origin_lookup.raw_summary}")
+        typer.echo(f"id_départ={origin_lookup.city_id or 'absent'}")
+        typer.echo(f"legacy_id_départ={origin_lookup.legacy_id or 'absent'}")
+        typer.echo(f"ambiguous_départ={str(origin_lookup.ambiguous).lower()}")
+        if len(provider.last_city_lookups) > 1:
+            destination_lookup = provider.last_city_lookups[1]
+            typer.echo(f"lookup_source_arrivée={destination_lookup.source}")
+            typer.echo(f"requête_ville_arrivée={json.dumps(destination_lookup.params, ensure_ascii=False, sort_keys=True)}")
+            typer.echo(f"réponse_ville_arrivée={destination_lookup.raw_summary}")
+            typer.echo(f"id_arrivée={destination_lookup.city_id or 'absent'}")
+            typer.echo(f"legacy_id_arrivée={destination_lookup.legacy_id or 'absent'}")
+            typer.echo(f"ambiguous_arrivée={str(destination_lookup.ambiguous).lower()}")
+    else:
+        typer.echo(f"cache_from={'present' if find_cached_mapping(from_) else 'absent'}")
+        typer.echo(f"cache_to={'present' if find_cached_mapping(to) else 'absent'}")
+    typer.echo("etape_search=search_if_ids_present")
+    typer.echo(f"lookup_source={provider.last_public_params.get('lookup_source', provider.last_lookup_source)}")
+    typer.echo(f"id_kind={provider.last_public_params.get('id_kind', provider.last_id_kind)}")
+    typer.echo(f"from_city_id={provider.last_from_city_id or 'absent'}")
+    typer.echo(f"from_legacy_id={provider.last_from_legacy_id or 'absent'}")
+    typer.echo(f"to_city_id={provider.last_to_city_id or 'absent'}")
+    typer.echo(f"to_legacy_id={provider.last_to_legacy_id or 'absent'}")
+    typer.echo(f"lookup_ambiguous={str(provider.last_lookup_ambiguous).lower()}")
+    typer.echo(f"lookup_http_status={provider.last_lookup_status_code if provider.last_lookup_status_code is not None else 'non disponible'}")
+    typer.echo(f"search_http_status={provider.last_search_status_code if provider.last_search_status_code is not None else 'non appelé'}")
+    typer.echo(f"endpoint={provider.last_path or 'non disponible'}")
+    typer.echo(f"http_status={provider.last_status_code if provider.last_status_code is not None else 'non disponible'}")
+    typer.echo(f"raw_count={provider.last_raw_count}")
+    typer.echo(f"normalized_count={provider.last_normalized_count}")
+    typer.echo(f"error={scrub_text(provider.last_error) if provider.last_error else 'non disponible'}")
+    typer.echo(f"params={json.dumps(provider.last_public_params, ensure_ascii=True, sort_keys=True)}")
+    typer.echo(f"offres={len(offers)}")
+
+
+def _format_gtfs_stop(row: Mapping[str, object]) -> str:
+    return (
+        f"stop_id={row.get('stop_id') or 'absent'} | "
+        f"stop_name={row.get('stop_name') or 'non disponible'} | "
+        f"stop_lat={row.get('stop_lat') or ''} | "
+        f"stop_lon={row.get('stop_lon') or ''} | "
+        f"location_type={row.get('location_type') or ''} | "
+        f"parent_station={row.get('parent_station') or ''}"
+    )
 
 
 if __name__ == "__main__":

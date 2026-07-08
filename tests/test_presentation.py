@@ -6,6 +6,7 @@ from travel_scrapping.web.presentation import (
     booking_display,
     date_time,
     destination_display,
+    operator_display,
     price_display,
     short_date,
     warnings_display,
@@ -48,6 +49,13 @@ def test_price_display_without_currency_or_decimals():
 
 def test_empty_airlines_displayed_as_unknown():
     assert airlines_display("[]") == ""
+
+
+def test_operator_display_priority():
+    assert operator_display(SimpleNamespace(operator_name="SNCF", airlines_json='["easyJet"]', provider="p", source="s")) == "SNCF"
+    assert operator_display(SimpleNamespace(operator_name=None, airlines_json='["easyJet"]', provider="p", source="s")) == "easyJet"
+    assert operator_display(SimpleNamespace(operator_name=None, airlines_json="[]", provider="flixbus", source="s")) == "flixbus"
+    assert operator_display(SimpleNamespace(operator_name=None, airlines_json="[]", provider=None, source="distribusion")) == "distribusion"
 
 
 def test_warnings_translated_to_french():

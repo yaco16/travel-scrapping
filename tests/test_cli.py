@@ -192,7 +192,7 @@ def test_cli_search_applies_overrides_and_sends_email(monkeypatch):
     assert result.exit_code == 0
     assert "run_id=42" in result.output
     assert "Étape 01 — Configuration chargée" in result.output
-    assert "Origine cdg · Budget max 150,00 EUR · 4-5 nuits · départ du 01/07/26 au 31/07/26" in result.output
+    assert "Origine cdg · Budget max 150 EUR · 4-5 nuits · départ du 01/07/26 au 31/07/26" in result.output
     assert "Étape 05 — Résultats affichés" in result.output
     assert '"sent": true' in result.output
     assert calls["settings"].origin_airport == "cdg"
@@ -349,3 +349,221 @@ def test_cli_bus_commands_enabled(monkeypatch):
     assert "stations_origin=1" in smoke.output
     assert "offres=1" in smoke.output
     assert "link=oui" in smoke.output
+
+
+def test_cli_smoke_flixbus_openapi_no_live_does_not_call_network(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("FLIXBUS_OPENAPI_ENABLED", "true")
+
+    class FakeFlixBusOpenApiProvider:
+        name = "flixbus_openapi"
+
+        def __init__(self, settings):
+            self.last_attempted = False
+            self.last_status_code = None
+            self.last_lookup_status_code = None
+            self.last_search_status_code = None
+            self.last_raw_count = 0
+            self.last_normalized_count = 0
+            self.last_error = None
+            self.last_path = None
+            self.last_public_params = {}
+            self.last_city_lookups = []
+            self.last_lookup_source = "none"
+            self.last_lookup_ambiguous = False
+            self.last_from_city_id = None
+            self.last_to_city_id = None
+            self.last_from_legacy_id = None
+            self.last_to_legacy_id = None
+            self.last_id_kind = "uuid"
+
+        def status(self):
+            return ProviderStatus("flixbus_openapi", enabled=True)
+
+        async def search_roundtrip(self, origin, destination, depart, ret):
+            self.last_attempted = True
+            self.last_error = "legacy_id absent"
+            return []
+
+    monkeypatch.setattr("travel_scrapping.cli.FlixBusOpenApiProvider", FakeFlixBusOpenApiProvider)
+    monkeypatch.setattr(
+        "travel_scrapping.cli.gtfs_info",
+        lambda: SimpleNamespace(present=False),
+    )
+
+    result = runner.invoke(app, ["smoke-flixbus-openapi"])
+
+    assert result.exit_code == 0
+    assert "provider=flixbus_openapi" in result.output
+    assert "enabled=true" in result.output
+    assert "attempted=true" in result.output
+    assert "raw_count=0" in result.output
+    assert "normalized_count=0" in result.output
+    assert "params={}" in result.output
+
+
+def test_cli_smoke_flixbus_openapi_live_reports_city_resolution_without_fake_offer(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("FLIXBUS_OPENAPI_ENABLED", "true")
+
+    class FakeFlixBusOpenApiProvider:
+        name = "flixbus_openapi"
+
+        def __init__(self, settings):
+            self.last_attempted = False
+            self.last_status_code = 400
+            self.last_lookup_status_code = 200
+            self.last_search_status_code = None
+            self.last_raw_count = 0
+            self.last_normalized_count = 0
+            self.last_error = "legacy_id absent: 'Nice' or 'Paris'"
+            self.last_path = "https://global.api.flixbus.com/mobile/v1/network/autocomplete"
+            self.last_public_params = {"origin": "Nice", "destination": "Paris", "lookup_source": "autocomplete"}
+            self.last_lookup_source = "autocomplete"
+            self.last_lookup_ambiguous = False
+            self.last_from_city_id = None
+            self.last_to_city_id = None
+            self.last_from_legacy_id = None
+            self.last_to_legacy_id = None
+            self.last_id_kind = "uuid"
+            self.last_city_lookups = [
+                SimpleNamespace(
+                    params={"q": "Nice", "lang": "fr"},
+                    raw_summary="autocomplete count=0",
+                    city_id=None,
+                    legacy_id=None,
+                    source="autocomplete",
+                    ambiguous=False,
+                ),
+                SimpleNamespace(
+                    params={"q": "Paris", "lang": "fr"},
+                    raw_summary="autocomplete count=0",
+                    city_id=None,
+                    legacy_id=None,
+                    source="autocomplete",
+                    ambiguous=False,
+                ),
+            ]
+
+        def status(self):
+            return ProviderStatus("flixbus_openapi", enabled=True)
+
+        async def search_roundtrip(self, origin, destination, depart, ret):
+            self.last_attempted = True
+            return []
+
+    monkeypatch.setattr("travel_scrapping.cli.FlixBusOpenApiProvider", FakeFlixBusOpenApiProvider)
+    monkeypatch.setattr("travel_scrapping.cli.gtfs_info", lambda: SimpleNamespace(present=False))
+
+    result = runner.invoke(
+        app,
+        [
+            "smoke-flixbus-openapi",
+            "--from",
+            "Nice",
+            "--to",
+            "Paris",
+            "--depart",
+            "2026-07-30",
+            "--return",
+            "2026-08-02",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert 'requête_ville_départ={"lang": "fr", "q": "Nice"}' in result.output
+    assert "id_départ=absent" in result.output
+    assert "legacy_id_départ=absent" in result.output
+    assert 'requête_ville_arrivée={"lang": "fr", "q": "Paris"}' in result.output
+    assert "id_arrivée=absent" in result.output
+    assert "legacy_id_arrivée=absent" in result.output
+    assert "id_kind=uuid" in result.output
+    assert "http_status=400" in result.output
+    assert "raw_count=0" in result.output
+    assert "normalized_count=0" in result.output
+    assert "offres=0" in result.output
+
+
+def test_cli_smoke_flixbus_openapi_disabled(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("FLIXBUS_OPENAPI_ENABLED", "false")
+
+    result = runner.invoke(app, ["smoke-flixbus-openapi"])
+
+    assert result.exit_code == 0
+    assert "provider=flixbus_openapi" in result.output
+    assert "enabled=false" in result.output
+    assert "attempted=false" in result.output
+
+
+def test_cli_flixbus_gtfs_info_and_search(monkeypatch):
+    info = SimpleNamespace(
+        present=True,
+        path="data/gtfs/flixbus/gtfs_generic_eu.zip",
+        downloaded_at=datetime(2026, 6, 20, tzinfo=timezone.utc),
+        size_bytes=123,
+        files_present={"stops.txt": True, "routes.txt": False},
+        stops_count=1,
+        routes_count=0,
+        trips_count=0,
+        valid_from="20260701",
+        valid_until="20260831",
+        nice_examples=[{"stop_id": "nce", "stop_name": "Nice", "stop_lat": "1", "stop_lon": "2"}],
+        paris_examples=[],
+        error=None,
+    )
+    monkeypatch.setattr("travel_scrapping.cli.gtfs_info", lambda: info)
+    monkeypatch.setattr("travel_scrapping.cli.search_stops", lambda query: info.nice_examples)
+
+    diagnostic = runner.invoke(app, ["flixbus-gtfs-info"])
+    search = runner.invoke(app, ["flixbus-gtfs-stop-search", "--query", "Nice"])
+
+    assert diagnostic.exit_code == 0
+    assert "stops.txt=present" in diagnostic.output
+    assert "note=stop_id GTFS != legacy_id reservation" in diagnostic.output
+    assert search.exit_code == 0
+    assert "stop_id=nce" in search.output
+
+
+def test_cli_flixbus_autocomplete_and_cache_set(monkeypatch, tmp_path):
+    async def fake_autocomplete(query, lang="fr"):
+        return SimpleNamespace(
+            endpoint="https://global.api.flixbus.com/mobile/v1/network/autocomplete",
+            params={"q": query, "limit": 50, "lang": lang},
+            status_code=200,
+            raw_count=1,
+            ambiguous=False,
+            selected={"id": "uuid", "legacy_id": "nice-legacy"},
+            error=None,
+            results=[
+                {
+                    "name": "Nice",
+                    "legacy_id": "nice-legacy",
+                    "id": "uuid",
+                    "slug": "nice",
+                    "country_code": "FR",
+                }
+            ],
+        )
+
+    stored = {}
+
+    def fake_save(**kwargs):
+        stored.update(kwargs)
+        return {"query": kwargs["query"], "id": kwargs["id"], "legacy_id": kwargs["legacy_id"], "name": kwargs["name"]}
+
+    monkeypatch.setattr("travel_scrapping.cli.autocomplete_city", fake_autocomplete)
+    monkeypatch.setattr("travel_scrapping.cli.save_city_mapping", fake_save)
+
+    autocomplete = runner.invoke(app, ["flixbus-autocomplete", "--query", "Nice"])
+    cache = runner.invoke(
+        app,
+        ["flixbus-city-cache-set", "--query", "Nice", "--id", "uuid", "--legacy-id", "nice-legacy", "--name", "Nice"],
+    )
+
+    assert autocomplete.exit_code == 0
+    assert "selected_id=uuid" in autocomplete.output
+    assert "legacy_id=nice-legacy" in autocomplete.output
+    assert cache.exit_code == 0
+    assert stored["id"] == "uuid"
+    assert stored["legacy_id"] == "nice-legacy"

@@ -25,7 +25,7 @@ from travel_scrapping.db import (
     valid_price_observation_clause,
 )
 from travel_scrapping.email.brevo import send_deals_email
-from travel_scrapping.search.engine import create_search_run, run_search_sync
+from travel_scrapping.search.engine import create_search_run, parse_modes, run_search_sync
 from travel_scrapping.airports import resolve_airport
 from travel_scrapping.web import presentation
 
@@ -72,6 +72,7 @@ templates.env.filters["destination_display"] = presentation.destination_display
 templates.env.filters["short_date"] = presentation.short_date
 templates.env.filters["price_display"] = presentation.price_display
 templates.env.filters["airlines_display"] = presentation.airlines_display
+templates.env.filters["operator_display"] = presentation.operator_display
 templates.env.filters["warnings_display"] = presentation.warnings_display
 templates.env.filters["booking_display"] = presentation.booking_display
 templates.env.filters["mode_display"] = presentation.mode_display
@@ -240,8 +241,16 @@ def run_config_context(run: SearchRun | None, settings, statuses: dict[str, Prov
     if not data and statuses:
         data = legacy_config_from_statuses(run, statuses)
     origin = str(data.get("origin_airport") or settings.origin_airport)
-    budget = numeric_config_value(data.get("budget_eur"), settings.max_roundtrip_price_eur)
-    start_raw = data.get("search_start_date") or settings.search_start_date
+    budget = int(numeric_config_value(data.get("budget_eur"), settings.max_roundtrip_price_eur))
+    start_from_run = data.get("search_start_date")
+    if isinstance(start_from_run, str):
+        try:
+            start_from_run = date.fromisoformat(start_from_run)
+        except ValueError:
+            start_from_run = None
+    if isinstance(start_from_run, date) and start_from_run < date.today():
+        start_from_run = date.today()
+    start_raw = start_from_run or settings.search_start_date
     end_raw = data.get("search_end_date") or settings.effective_search_end_date
     min_nights = int_config_value(data.get("min_nights"), settings.min_nights)
     max_nights = int_config_value(data.get("max_nights"), settings.max_nights)
@@ -413,8 +422,9 @@ def home(request: Request):
     with session_scope(factory) as session:
         run = session.scalars(select(SearchRun).order_by(SearchRun.id.desc())).first()
         statuses = latest_provider_statuses(session, run.id if run else None)
-        default_config = run_config_context(None, settings)
+        fallback_config = run_config_context(None, settings)
         last_run_config = run_config_context(run, settings, statuses) if run else None
+        default_config = last_run_config or fallback_config
         return templates.TemplateResponse(
             request,
             "home.html",
@@ -448,11 +458,12 @@ async def run_search_route(request: Request, background_tasks: BackgroundTasks):
     depart_to_raw = str(form.get("depart_date_max") or form.get("search_end_date") or settings.search_end_date)
     min_nights = int(str(form.get("min_nights") or settings.min_nights))
     max_nights = int(str(form.get("max_nights") or settings.max_nights))
-    max_price = float(str(form.get("max_price") or settings.max_roundtrip_price_eur))
+    max_price = int(float(str(form.get("max_price") or settings.max_roundtrip_price_eur)))
     max_stops = int(str(form.get("max_stops") or settings.max_stops))
     max_air_time = float(str(form.get("max_air_time") or settings.max_air_time_hours))
     max_layover = float(str(form.get("max_layover") or settings.max_layover_hours))
-    modes = ",".join(str(mode) for mode in form.getlist("modes")) or "flight"
+    selected_modes = [str(mode) for mode in form.getlist("modes")]
+    modes = ",".join(mode for mode in ("flight", "bus", "train") if mode in parse_modes(",".join(selected_modes)))
     search_settings = settings.model_copy(
         update={
             "origin_airport": origin.upper(),

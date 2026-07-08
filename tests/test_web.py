@@ -1,6 +1,7 @@
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 from travel_scrapping.config import get_settings
@@ -64,12 +65,30 @@ def test_home_keeps_search_form_and_hides_travelpayouts_marker_warning(tmp_path,
     assert "Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant" not in response.text
 
 
+def test_home_transport_picker_has_all_sync_script(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    for label in ["Avion", "Bus", "Train", "Tous"]:
+        assert label in response.text
+    assert 'data-mode-picker' in response.text
+    assert 'data-mode-all' in response.text
+    assert 'data-mode-option' in response.text
+    assert "options.forEach" in response.text
+    assert "all.checked = options.every" in response.text
+
+
 def test_dashboard_configuration_uses_end_date_and_french_formats(tmp_path, monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
     monkeypatch.setenv("MAX_ROUNDTRIP_PRICE_EUR", "150")
     monkeypatch.setenv("MIN_NIGHTS", "1")
     monkeypatch.setenv("MAX_NIGHTS", "7")
+    monkeypatch.setenv("SEARCH_START_DATE", "2026-07-01")
     monkeypatch.setenv("SEARCH_END_DATE", "2026-08-31")
     client = TestClient(create_app())
 
@@ -77,7 +96,7 @@ def test_dashboard_configuration_uses_end_date_and_french_formats(tmp_path, monk
 
     assert response.status_code == 200
     assert (
-        "Origine NCE · Budget max 150,00 EUR · 1-7 nuits · "
+        "Origine NCE · Budget max 150 EUR · 1-7 nuits · "
         "départ du 01/07/26 au 31/08/26 · 1 correspondance max"
     ) in response.text
     assert "jusqu&#39;au None" not in response.text
@@ -132,6 +151,77 @@ def test_run_search_redirects_to_results_run_id(tmp_path, monkeypatch):
         "modes": "flight,bus",
         "depart_from": date(2026, 7, 1),
     }
+
+
+@pytest.mark.parametrize(("posted_mode", "expected_mode"), [("bus", "bus"), ("train", "train"), ("all", "flight,bus,train")])
+def test_run_search_accepts_ground_and_all_modes(tmp_path, monkeypatch, posted_mode, expected_mode):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    captured = {}
+
+    def fake_create_search_run(settings, *, status, modes):
+        assert status == "pending"
+        captured["created_modes"] = modes
+        return 42
+
+    def fake_run_search_background(settings, *, run_id, modes, depart_from):
+        captured["background_modes"] = modes
+
+    monkeypatch.setattr(web_routes, "create_search_run", fake_create_search_run)
+    monkeypatch.setattr(web_routes, "run_search_background", fake_run_search_background)
+    client = TestClient(create_app())
+    response = client.post(
+        "/run",
+        data={
+            "origin_airport": "NCE",
+            "depart_date_min": "2026-07-01",
+            "depart_date_max": "2026-08-31",
+            "min_nights": "3",
+            "max_nights": "5",
+            "max_price": "100",
+            "max_stops": "1",
+            "modes": posted_mode,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/results?run_id=42"
+    assert captured == {"created_modes": expected_mode, "background_modes": expected_mode}
+
+
+def test_run_search_all_checkbox_with_modes_normalizes_to_all_modes(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/web.db")
+    captured = {}
+
+    def fake_create_search_run(settings, *, status, modes):
+        captured["created_modes"] = modes
+        return 42
+
+    def fake_run_search_background(settings, *, run_id, modes, depart_from):
+        captured["background_modes"] = modes
+
+    monkeypatch.setattr(web_routes, "create_search_run", fake_create_search_run)
+    monkeypatch.setattr(web_routes, "run_search_background", fake_run_search_background)
+    client = TestClient(create_app())
+    response = client.post(
+        "/run",
+        data={
+            "origin_airport": "NCE",
+            "depart_date_min": "2026-07-01",
+            "depart_date_max": "2026-08-31",
+            "min_nights": "3",
+            "max_nights": "5",
+            "max_price": "100",
+            "max_stops": "1",
+            "modes": ["flight", "bus", "train", "all"],
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert captured == {"created_modes": "flight,bus,train", "background_modes": "flight,bus,train"}
 
 
 def test_home_search_form_prevents_double_submit(tmp_path, monkeypatch):
@@ -232,6 +322,57 @@ def test_results_filter_by_run_id(tmp_path, monkeypatch):
     assert "Venise" in response.text
     assert "Barcelone" not in response.text
     assert "45,00 €" in response.text
+
+
+def test_results_operator_moves_to_bottom_right_pill_without_provider_ok(tmp_path, monkeypatch):
+    get_settings.cache_clear()
+    db_url = f"sqlite:///{tmp_path}/web.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    factory = init_db(get_settings())
+    now = datetime(2026, 6, 20, 12, 0, 0)
+    with session_scope(factory) as session:
+        run = SearchRun(status="completed", accepted_count=1, rejected_count=0, cheapest_price_eur=35)
+        session.add(run)
+        session.flush()
+        session.add(
+            ProviderStatusRow(
+                run_id=run.id,
+                name="flixbus_rapidapi",
+                enabled=True,
+                ok=True,
+            )
+        )
+        session.add(
+            Deal(
+                run_id=run.id,
+                source="flixbus",
+                transport_mode="bus",
+                provider="flixbus_rapidapi",
+                origin_airport="NCE",
+                destination_airport="VCE",
+                outbound_date=date(2026, 7, 2),
+                return_date=date(2026, 7, 6),
+                nights=4,
+                total_price=35,
+                currency="EUR",
+                total_price_eur=35,
+                airlines_json="[]",
+                operator_name="FlixBus",
+                booking_url="https://example.test/flixbus",
+                actionable=True,
+                confidence="high",
+                fetched_at=now,
+            )
+        )
+
+    client = TestClient(create_app())
+    response = client.get("/results")
+
+    assert response.status_code == 200
+    assert "Provider OK" not in response.text
+    assert '<span class="operator-pill">FlixBus</span>' in response.text
+    assert "02/07/26 - 06/07/26" in response.text
+    assert "35,00 €" in response.text
 
 
 def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
@@ -1073,8 +1214,8 @@ def test_results_use_run_snapshot_and_show_cheapest_first(tmp_path, monkeypatch)
     assert "Meilleur prix" in response.text
     assert 'class="deal-card best"' in response.text
     assert 'class="badge best-badge">Meilleur prix</span>' in response.text
-    assert "Budget max 150,00 EUR · 1-7 nuits" in response.text
-    assert "Budget max 100,00 EUR · 3-5 nuits" not in response.text
+    assert "Budget max 150 EUR · 1-7 nuits" in response.text
+    assert "Budget max 100 EUR · 3-5 nuits" not in response.text
     assert response.text.index("44,00 €") < response.text.index("71,00 €")
 
 
@@ -1084,7 +1225,7 @@ def test_country_display_known_codes():
     assert web_routes.country_display("ES") == "Espagne"
 
 
-def test_home_distinguishes_default_config_and_latest_run_snapshot(tmp_path, monkeypatch):
+def test_home_uses_latest_run_snapshot_as_default_search_config(tmp_path, monkeypatch):
     get_settings.cache_clear()
     db_url = f"sqlite:///{tmp_path}/web.db"
     monkeypatch.setenv("DATABASE_URL", db_url)
@@ -1092,11 +1233,13 @@ def test_home_distinguishes_default_config_and_latest_run_snapshot(tmp_path, mon
     monkeypatch.setenv("MIN_NIGHTS", "3")
     monkeypatch.setenv("MAX_NIGHTS", "5")
     factory = init_db(get_settings())
+    future_start = date.today() + timedelta(days=30)
+    future_end = date.today() + timedelta(days=60)
     config = {
         "origin_airport": "NCE",
         "budget_eur": 150,
-        "search_start_date": "2026-07-01",
-        "search_end_date": "2026-08-31",
+        "search_start_date": future_start.isoformat(),
+        "search_end_date": future_end.isoformat(),
         "min_nights": 1,
         "max_nights": 7,
         "max_stops": 1,
@@ -1122,9 +1265,14 @@ def test_home_distinguishes_default_config_and_latest_run_snapshot(tmp_path, mon
 
     assert response.status_code == 200
     assert "Configuration par défaut" in response.text
-    assert "Budget max 100,00 EUR · 3-5 nuits" in response.text
+    assert "Budget max 100 EUR · 3-5 nuits" not in response.text
     assert "Dernier run" in response.text
-    assert "Budget max 150,00 EUR · 1-7 nuits" in response.text
+    assert "Budget max 150 EUR · 1-7 nuits" in response.text
+    assert 'name="max_price" value="150"' in response.text
+    assert 'name="min_nights" value="1"' in response.text
+    assert 'name="max_nights" value="7"' in response.text
+    assert f'name="depart_date_min" type="date" value="{future_start.isoformat()}"' in response.text
+    assert f'name="depart_date_max" type="date" value="{future_end.isoformat()}"' in response.text
     assert f'href="/results?run_id={run_id}"' in response.text
     assert "Relancer avec cette configuration" in response.text
 
@@ -1153,4 +1301,5 @@ def test_home_rerun_preserves_run_modes(tmp_path, monkeypatch):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert '<input name="modes" type="hidden" value="bus,train">' in response.text
+    assert '<input name="modes" type="checkbox" value="bus" data-mode-option checked>' in response.text
+    assert '<input name="modes" type="checkbox" value="train" data-mode-option checked>' in response.text

@@ -131,7 +131,8 @@ class SerpApiGoogleFlightDealsProvider(FlightProvider):
     ) -> list[DealCandidate]:
         if not self.status().enabled:
             return []
-        start = self.settings.search_start_date or (date_pairs[0][0] if date_pairs else date.today())
+        requested_start = self.settings.search_start_date or (date_pairs[0][0] if date_pairs else date.today())
+        start = max(requested_start, current_search_date())
         primary_params = serpapi_deals_params(
             api_key=self.settings.serpapi_api_key,
             origin=self.settings.origin_airport,
@@ -147,15 +148,40 @@ class SerpApiGoogleFlightDealsProvider(FlightProvider):
         self.last_ok = True
         self.last_error = None
         self.last_attempted = True
+        if self.settings.effective_search_end_date < start:
+            self.last_ok = False
+            self.last_status_code = None
+            self.last_raw_count = 0
+            self.last_normalized_count = 0
+            self.last_destination_examples = []
+            self.last_error = (
+                "Plage de dates invalide: "
+                f"date départ max {self.settings.effective_search_end_date.isoformat()} "
+                f"avant date départ min {start.isoformat()}."
+            )
+            self.last_public_params = {
+                **public_params(primary_params),
+                "http_status": None,
+                "raw_count": 0,
+                "normalized_count": 0,
+                "payload_diagnostic": {"error": self.last_error},
+                "diagnostic": self.last_error,
+            }
+            return []
         async with httpx.AsyncClient(timeout=45) as client:
             response = await client.get(SERPAPI_URL, params=primary_params)
             self.last_status_code = response.status_code
-            response.raise_for_status()
-            payload_for_debug = response.json()
+            try:
+                payload_for_debug = response.json()
+            except ValueError:
+                payload_for_debug = {"error": scrub_text(getattr(response, "text", ""))[:500]}
         raw_count = count_deals_items(payload_for_debug)
-        parsed = parse_google_flight_deals_payload(payload_for_debug, origin=self.settings.origin_airport)
         payload_diag = serpapi_payload_diagnostic(payload_for_debug)
-        if payload_diag.get("error"):
+        parsed = [] if response.status_code >= 400 else parse_google_flight_deals_payload(payload_for_debug, origin=self.settings.origin_airport)
+        if response.status_code >= 400:
+            self.last_ok = False
+            self.last_error = scrub_text(str(payload_diag.get("error") or f"HTTP {response.status_code}"))[:500]
+        elif payload_diag.get("error"):
             self.last_ok = False
             self.last_error = scrub_text(str(payload_diag["error"]))[:500]
             parsed = []
@@ -176,6 +202,8 @@ class SerpApiGoogleFlightDealsProvider(FlightProvider):
         diagnostic = None
         if self.last_status_code == 200 and self.last_ok and self.last_raw_count == 0:
             diagnostic = "SerpApi appelé, HTTP 200, payload sans clé deals exploitable."
+        elif self.last_status_code and self.last_status_code >= 400:
+            diagnostic = f"SerpApi appelé, HTTP {self.last_status_code}: {self.last_error or 'erreur provider'}"
         self.last_public_params = {
             **public_params(primary_params),
             "http_status": self.last_status_code,
@@ -215,6 +243,10 @@ def serpapi_base_params(
         "deep_search": "true",
         "api_key": api_key,
     }
+
+
+def current_search_date() -> date:
+    return date.today()
 
 
 def serpapi_deals_params(

@@ -10,6 +10,7 @@ import yaml
 from sqlalchemy import select
 
 from travel_scrapping.config import Settings
+from travel_scrapping.bus.comparabus import ComparabusProvider
 from travel_scrapping.bus.flixbus_openapi import FlixBusOpenApiProvider
 from travel_scrapping.bus.flixbus_rapidapi import FlixBusRapidApiProvider
 from travel_scrapping.db import ProviderStatusRow, SearchRun, init_db, save_deals, session_scope
@@ -56,9 +57,9 @@ def build_providers(settings: Settings, *, include_indicative: bool = False) -> 
 def parse_modes(modes: str | None) -> set[str]:
     if not modes:
         return {"flight"}
-    if modes == "all":
-        return set(ALL_TRANSPORT_MODES)
     parsed = {part.strip() for part in modes.split(",") if part.strip()}
+    if parsed == {"all"} or "all" in parsed:
+        return set(ALL_TRANSPORT_MODES)
     mode_set = parsed & ALL_TRANSPORT_MODES
     return mode_set or {"flight"}
 
@@ -204,15 +205,47 @@ async def run_search(
                     {"name": status.name, "enabled": status.enabled, "role": provider_role(status.name)}
                 )
                 if status.enabled:
-                    candidates = await distribusion_provider.search(
-                        destinations,
-                        date_pairs,
-                        limit=settings.top_results_limit,
-                    )
-                    row.raw_count = len(candidates)
-                    row.normalized_count = len(candidates)
+                    ground_accepted = 0
+                    ground_rejected = 0
+                    ground_reasons: Counter[str] = Counter()
+                    try:
+                        candidates = await distribusion_provider.search(
+                            destinations,
+                            date_pairs,
+                            limit=settings.top_results_limit,
+                        )
+                    except Exception as exc:
+                        rejected += 1
+                        row.ok = False
+                        row.error = scrub_text(str(exc))[:500]
+                        row.attempted = bool(getattr(distribusion_provider, "last_attempted", True))
+                        row.http_status = getattr(distribusion_provider, "last_status_code", None)
+                        row.rejected_count = 1
+                        row.main_rejection_reason = "provider error (1)"
+                    else:
+                        for deal in candidates:
+                            if deal.transport_mode not in mode_set:
+                                continue
+                            ok, reasons = validate_deal(deal, settings)
+                            if ok and deal.actionable:
+                                all_deals.append(deal)
+                                ground_accepted += 1
+                            else:
+                                rejected += 1
+                                ground_rejected += 1
+                                ground_reasons.update(rejection_reasons(deal, reasons))
+                        row.raw_count = len(candidates)
+                        row.normalized_count = len(candidates)
+                        enrich_status(
+                            row,
+                            distribusion_provider,
+                            accepted=ground_accepted,
+                            rejected=ground_rejected,
+                            reasons=ground_reasons,
+                        )
             if "bus" in mode_set:
                 bus_providers_to_run = [
+                    ComparabusProvider(settings),
                     FlixBusOpenApiProvider(settings),
                     FlixBusRapidApiProvider(settings),
                 ]
@@ -227,6 +260,10 @@ async def run_search(
                     bus_accepted = 0
                     bus_rejected = 0
                     bus_raw = 0
+                    bus_raw_total = 0
+                    bus_normalized_total = 0
+                    bus_errors: list[str] = []
+                    bus_attempted = False
                     bus_reasons: Counter[str] = Counter()
                     for destination in destinations[: max(1, min(len(destinations), settings.top_results_limit))]:
                         try:
@@ -237,9 +274,17 @@ async def run_search(
                             rejected += 1
                             bus_rejected += 1
                             bus_reasons.update(["provider error"])
-                            row.ok = False
-                            row.error = scrub_text(str(exc))[:500]
+                            bus_errors.append(scrub_text(str(exc))[:500])
                             continue
+                        finally:
+                            bus_attempted = bus_attempted or bool(
+                                getattr(bus_provider, "last_attempted", False) or getattr(bus_provider, "last_path", None)
+                            )
+                            row.http_status = getattr(bus_provider, "last_status_code", row.http_status)
+                            bus_raw_total += int(getattr(bus_provider, "last_raw_count", 0) or 0)
+                            bus_normalized_total += int(getattr(bus_provider, "last_normalized_count", 0) or 0)
+                            if getattr(bus_provider, "last_error", None):
+                                bus_errors.append(scrub_text(bus_provider.last_error)[:500])
                         bus_raw += len(offers)
                         for offer in offers:
                             deal = offer.to_deal_candidate()
@@ -251,16 +296,17 @@ async def run_search(
                                 rejected += 1
                                 bus_rejected += 1
                                 bus_reasons.update(rejection_reasons(deal, reasons))
-                    if getattr(bus_provider, "last_error", None):
+                    if bus_errors:
                         row.ok = False
-                        row.error = scrub_text(bus_provider.last_error)
-                    row.attempted = bool(getattr(bus_provider, "last_path", None))
-                    row.http_status = bus_provider.last_status_code
-                    row.raw_count = bus_raw
-                    row.normalized_count = bus_raw
+                        row.error = scrub_text("; ".join(dict.fromkeys(bus_errors)))[:500]
+                    row.attempted = bus_attempted
+                    row.raw_count = max(bus_raw_total, bus_raw)
+                    row.normalized_count = max(bus_normalized_total, bus_raw)
                     row.accepted_count = bus_accepted
                     row.rejected_count = bus_rejected
                     row.main_rejection_reason = main_reason(bus_reasons)
+                    row.request_params_json = json.dumps(getattr(bus_provider, "last_public_params", {}) or {})
+                    row.destination_examples_json = json.dumps(getattr(bus_provider, "last_destination_examples", []) or [])
             sorted_deals = sort_deals(all_deals)[: settings.top_results_limit]
             inserted = save_deals(session, run, sorted_deals)
             run.status = "completed"
@@ -310,6 +356,7 @@ def provider_role(name: str) -> str:
         "ryanair": "primary",
         "amadeus": "primary",
         "travelpayouts": "optional",
+        "comparabus": "optional",
         "flixbus": "optional",
         "flixbus_openapi": "optional",
         "flixbus_rapidapi": "optional",

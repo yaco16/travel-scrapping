@@ -50,7 +50,7 @@ class RyanairProvider(FlightProvider):
         if not self.status().enabled:
             return []
 
-        start = self.settings.search_start_date or date.today()
+        start = max(self.settings.search_start_date or date.today(), date.today())
         end = self.settings.effective_search_end_date
         inbound_end = end + timedelta(days=self.settings.max_nights)
 
