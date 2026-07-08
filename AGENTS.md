@@ -73,6 +73,7 @@ Si aucun Python modifie : `Ruff : non applicable, aucun fichier Python modifie`.
 - Stager uniquement fichiers de la tranche.
 - Ne jamais commiter `.env`, SQLite, caches, logs, couverture ou artefacts temporaires.
 - Commit/push seulement apres validations demandees/reussies.
+- Travailler uniquement sur main : ne jamais creer de branche ni de worktree. Toute action de creation de branche/worktree doit etre refusee ou signalee au user au lieu d'etre executee.
 
 ## Termine
 
