@@ -1,5 +1,10 @@
 # TODO
 
+## Workflow git (2026-07-08)
+
+- Fin du workflow branche/PR : branche `agent/travel-search-fixes` (fixes providers/UI + fix fixture bus) fusionnée directement dans `main` (fast-forward) et poussée. Branche supprimée en local et sur `origin`. Il ne reste que `main`.
+- Regle ajoutee dans `AGENTS.md` section Git : travailler uniquement sur `main`, ne jamais creer de branche ni de worktree.
+
 ## Corrections faites (2026-07-08, suite)
 
 - Bug "night range mismatch" massif sur les vols (26/41 rejets) : `RyanairProvider` interrogeait `roundTripFares` avec une fenêtre `inboundDepartureDateFrom/To` large (non liée à la date aller precise), et `AmadeusProvider` (Flight Inspiration Search) ne filtre pas du tout la duree du sejour cote API — les deux renvoyaient donc des couples aller/retour hors `[min_nights, max_nights]`, rejetes ensuite par `filters.py`. Corrige : `ryanair.py` envoie desormais `durationFrom`/`durationTo` a l'API ; `amadeus.py` filtre cote client les paires hors bornes dans `_parse_inspire`.
