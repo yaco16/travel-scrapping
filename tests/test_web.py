@@ -860,6 +860,7 @@ def test_deals_api_returns_normalized_deals_and_provider_status(tmp_path, monkey
                 provider="flixbus_rapidapi",
                 origin_airport="NCE",
                 destination_airport="VCE",
+                destination_city="Venise",
                 outbound_date=date(2026, 7, 30),
                 return_date=date(2026, 8, 2),
                 nights=3,
