@@ -1,0 +1,57 @@
+@media (max-width: 800px) {
+  h1 {
+    font-size: 1.65rem;
+  }
+
+  .app-nav {
+    align-items: flex-start;
+    overflow-x: auto;
+  }
+
+  .app-shell {
+    padding: .8rem;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .layout-grid,
+  .metric-grid,
+  .search-form,
+  .deal-detail,
+  .detail-grid,
+  .fact-list,
+  .price-history__item {
+    grid-template-columns: 1fr;
+  }
+
+  .deal-detail__copy {
+    min-height: 180px;
+  }
+
+  .deal-card__main {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .route-timeline {
+    justify-self: stretch;
+    margin-top: .6rem;
+  }
+
+  .deal-card__price {
+    justify-self: stretch;
+    text-align: left;
+  }
+
+  .deal-card__operator {
+    margin-left: 0;
+  }
+
+  .run-facts__item {
+    grid-template-columns: 1fr;
+    gap: .2rem;
+  }
+}

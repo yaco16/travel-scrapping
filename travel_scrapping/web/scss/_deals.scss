@@ -1,0 +1,85 @@
+.offers {
+  display: grid;
+  gap: .75rem;
+}
+
+.deal-card {
+  padding: .9rem;
+}
+
+.deal-card--best {
+  border-color: var(--color-success-border);
+  background: var(--color-success-bg);
+}
+
+.deal-card__main {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+}
+
+.deal-card__info {
+  min-width: 0;
+}
+
+.deal-card__title {
+  margin-top: .55rem;
+}
+
+.deal-card__meta,
+.deal-card__price-note {
+  color: var(--color-muted);
+}
+
+.deal-card__meta {
+  margin-bottom: 0;
+}
+
+.deal-card__country {
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.deal-card__price {
+  min-width: 8rem;
+  justify-self: end;
+  text-align: right;
+}
+
+.deal-card__price-value {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.deal-card__price-note {
+  font-size: .86rem;
+}
+
+.deal-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .7rem;
+  margin-top: .75rem;
+  padding-top: .7rem;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: .9rem;
+}
+
+.deal-card__operator {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.65rem;
+  margin-left: auto;
+  padding: .22rem .55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: .82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}

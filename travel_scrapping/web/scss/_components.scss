@@ -1,0 +1,128 @@
+.alert {
+  padding: .7rem .8rem;
+  border-left: 4px solid var(--color-warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-bg);
+}
+
+.alert--compact {
+  margin-bottom: .75rem;
+}
+
+.run-facts {
+  display: grid;
+  gap: .65rem;
+  margin: 0;
+}
+
+.run-facts__item {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: .75rem;
+  padding-bottom: .55rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.run-facts__term {
+  color: var(--color-muted);
+}
+
+.run-facts__value {
+  margin: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: .4rem;
+  margin: 1rem 0;
+  scroll-margin-top: 1rem;
+}
+
+.tabs__link {
+  padding: .5rem .8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-primary-strong);
+  text-decoration: none;
+}
+
+.tabs__link--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.badge,
+.status-badge,
+.count-pill,
+.provider-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: .22rem .55rem;
+  border-radius: 999px;
+  background: var(--color-pill-bg);
+  color: var(--color-primary-strong);
+  font-size: .82rem;
+  font-weight: 650;
+}
+
+.badge--muted,
+.provider-pill--muted {
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+}
+
+.badge--best,
+.provider-pill--ok {
+  background: var(--color-best-bg);
+  color: var(--color-best-text);
+}
+
+.status-badge {
+  background: var(--color-status-bg);
+  color: var(--color-on-media);
+}
+
+.badge-row,
+.provider-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+
+.provider-list {
+  margin: .5rem 0 .9rem;
+}
+
+.details-panel__summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.status-list {
+  display: grid;
+  gap: .45rem;
+  margin-bottom: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.status-list__item {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+}
+
+.status-list__state {
+  color: var(--color-muted);
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-badge--pending,
+.status-list__state--pending {
+  animation: blink 1s ease-in-out infinite;
+}

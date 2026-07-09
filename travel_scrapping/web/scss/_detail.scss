@@ -1,0 +1,144 @@
+.deal-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: stretch;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.deal-detail__copy,
+.deal-detail__price {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+}
+
+.deal-detail__copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 220px;
+  padding: 1.25rem;
+  background:
+    linear-gradient(120deg, var(--color-detail-overlay-start), var(--color-detail-overlay-end)),
+    url("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80");
+  background-position: center;
+  background-size: cover;
+  color: var(--color-on-media);
+  gap: .55rem;
+}
+
+.deal-detail__copy .deal-card__country,
+.deal-detail__copy .hero__subtitle {
+  color: var(--color-on-media-muted);
+}
+
+.deal-detail__title {
+  max-width: 760px;
+  margin-bottom: 0;
+}
+
+.deal-detail__price {
+  display: grid;
+  align-content: center;
+  gap: .7rem;
+  padding: 1rem;
+  background: var(--color-surface);
+}
+
+.deal-detail__price-label,
+.deal-detail__operator,
+.booking-note {
+  color: var(--color-muted);
+}
+
+.deal-detail__price-value {
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.booking-note {
+  margin: 0;
+  padding: .65rem .75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr);
+  gap: 1rem;
+}
+
+.detail-panel {
+  overflow: hidden;
+}
+
+.fact-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+  margin: 0;
+}
+
+.fact-list__item,
+.price-history__item {
+  min-width: 0;
+  padding: .7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.fact-list__term {
+  margin-bottom: .25rem;
+  color: var(--color-muted);
+  font-size: .82rem;
+}
+
+.fact-list__value {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.signal-list {
+  display: grid;
+  gap: .5rem;
+}
+
+.signal-list__item {
+  padding: .65rem .75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-weight: 650;
+}
+
+.warning-list {
+  display: grid;
+  gap: .45rem;
+  margin: .8rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--color-muted);
+}
+
+.price-history {
+  display: grid;
+  gap: .55rem;
+}
+
+.price-history__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: .75rem;
+}
+
+.price-history__date,
+.price-history__source {
+  color: var(--color-muted);
+  font-style: normal;
+}

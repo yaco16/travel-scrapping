@@ -1,0 +1,113 @@
+.route-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-self: center;
+  min-width: min(26rem, 100%);
+  gap: .35rem;
+}
+
+.route-timeline__lineup {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.route-timeline__point {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.4rem;
+  text-align: center;
+  font-size: .82rem;
+}
+
+.route-timeline__time {
+  font-size: .95rem;
+}
+
+.route-timeline__place {
+  color: var(--color-muted);
+  font-size: .74rem;
+}
+
+.route-timeline__track {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.4rem;
+}
+
+.route-timeline__bar {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--color-border);
+}
+
+.route-timeline__stop {
+  position: relative;
+  padding: .12rem .5rem;
+  border-radius: 999px;
+  background: var(--color-neutral-bg);
+  color: var(--color-muted);
+  font-size: .74rem;
+  white-space: nowrap;
+}
+
+.route-timeline__day-badge {
+  color: var(--color-muted);
+  font-size: .68rem;
+  vertical-align: super;
+}
+
+.stopover-list {
+  display: grid;
+  min-width: min(34rem, 100%);
+  gap: .35rem;
+}
+
+.stopover-list__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem .45rem;
+  padding: .42rem .55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-stopover-bg);
+  box-shadow: var(--shadow-soft);
+  color: var(--color-muted);
+  font-size: .75rem;
+  line-height: 1.25;
+}
+
+.stopover-list__item--muted {
+  background: var(--color-stopover-muted-bg);
+}
+
+.stopover-list__station {
+  color: var(--color-text);
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+}
+
+.stopover-list__text {
+  white-space: nowrap;
+}
+
+.stopover-list__index {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: .12rem .42rem;
+  border-radius: 999px;
+  background: var(--color-pill-bg);
+  color: var(--color-primary);
+  font-weight: 750;
+}

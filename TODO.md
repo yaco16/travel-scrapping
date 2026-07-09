@@ -1,5 +1,14 @@
 # TODO
 
+## Corrections faites (2026-07-09, subdivision SCSS)
+
+- Agent: Codex.
+- Correction: `style.scss` reduit a un manifeste Sass; styles decoupes en partiels par domaine (`base`, `layout`, `forms`, `components`, `deals`, `timeline`, `detail`, `tables`, `responsive`). Couleurs directes sorties des partiels et centralisees dans `_colors.scss`, puis CSS compile regenere.
+- Cause racine: `style.scss` portait encore toute la feuille et plusieurs couleurs hardcodees, ce qui contredisait la convention SCSS modulaire.
+- Restrictions/blocages: aucun provider/API modifie; aucun fichier Python modifie.
+- Pistes: garder les nouvelles retouches visuelles dans le partiel SCSS du domaine concerne et ajouter toute nouvelle couleur dans `_colors.scss`.
+- Checks: `rtk npx sass --no-source-map travel_scrapping/web/scss/style.scss travel_scrapping/web/static/style.css`; controle absence couleur directe hors `_colors.scss`; `rtk git diff --check`.
+
 ## Corrections faites (2026-07-09, refonte SCSS BEM)
 
 - Agent: Codex.
