@@ -63,7 +63,7 @@ class RyanairProvider(FlightProvider):
             "inboundDepartureDateTo": inbound_end.isoformat(),
             "durationFrom": self.settings.min_nights,
             "durationTo": self.settings.max_nights,
-            "language": "fr",
+            "language": language_code(self.settings.default_locale),
             "limit": min(limit, RYANAIR_MAX_LIMIT),
             "maxPrice": int(self.settings.max_roundtrip_price_eur),
             "offset": 0,
@@ -185,6 +185,10 @@ def _float_or_none(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def language_code(locale: str) -> str:
+    return (locale or "fr").replace("_", "-").split("-", 1)[0].lower() or "fr"
 
 
 def _save_debug(payload: dict[str, Any], *, prefix: str) -> str:

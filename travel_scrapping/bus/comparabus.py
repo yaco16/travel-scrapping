@@ -62,8 +62,8 @@ class ComparabusProvider(BusProvider):
                 "arrStopName": destination_stop["name"],
                 "dateFrom": depart,
                 "type": "bus",
-                "currency": "EUR",
-                "locale": "fr_FR",
+                "currency": self.settings.default_currency,
+                "locale": comparabus_locale(self.settings.default_locale),
             }
             routes_payload = await self._get_json(client, "/api/routes", route_params)
             routes = [route for route in _route_rows(routes_payload) if route.get("type") == "bus"]
@@ -88,8 +88,8 @@ class ComparabusProvider(BusProvider):
                     "stopIdArr": route.get("stopIdArr"),
                     "dateFrom": depart,
                     "dateTo": ret,
-                    "currency": "EUR",
-                    "locale": "fr_FR",
+                    "currency": self.settings.default_currency,
+                    "locale": comparabus_locale(self.settings.default_locale),
                     "k": COMPARABUS_API_KEY,
                 }
                 prices_payload = await self._get_json(client, "/api/prices", price_params)
@@ -295,3 +295,7 @@ def _booking_url(row: dict[str, Any], *, depart: str, ret: str, base_url: str) -
         "type": row["type"],
     }
     return f"{base_url}/fr/redirect?{urlencode(params)}"
+
+
+def comparabus_locale(locale: str) -> str:
+    return (locale or "fr-FR").replace("-", "_")

@@ -58,6 +58,7 @@ def test_parse_fares_basic():
     assert d.booking_url is not None
     assert "NCE" in d.booking_url
     assert "BCN" in d.booking_url
+    assert "adults=1" in d.booking_url
     assert d.confidence == "high"
     assert d.is_direct is True
 
@@ -113,3 +114,35 @@ async def test_search_caps_requested_limit_to_ryanair_max():
     await provider.search([], [], limit=50)
 
     assert route.calls.last.request.url.params["limit"] == str(RYANAIR_MAX_LIMIT)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_uses_variable_filters_but_single_passenger():
+    route = respx.get("https://services-api.ryanair.com/farfnd/v4/roundTripFares").mock(
+        return_value=Response(200, json={"fares": []})
+    )
+    s = _settings(
+        search_start_date=date(2026, 9, 1),
+        search_end_date=date(2026, 10, 1),
+        min_nights=2,
+        max_nights=5,
+        max_roundtrip_price_eur=123,
+        default_currency="GBP",
+        default_locale="en-GB",
+        adults=4,
+    )
+    provider = RyanairProvider(s)
+
+    await provider.search([], [], limit=7)
+
+    params = route.calls.last.request.url.params
+    assert params["departureAirportIataCode"] == "NCE"
+    assert params["outboundDepartureDateFrom"] == "2026-09-01"
+    assert params["outboundDepartureDateTo"] == "2026-10-01"
+    assert params["durationFrom"] == "2"
+    assert params["durationTo"] == "5"
+    assert params["maxPrice"] == "123"
+    assert params["currency"] == "GBP"
+    assert params["language"] == "en"
+    assert "adults" not in params

@@ -317,6 +317,7 @@ def test_flixbus_provider_status_and_mocked_search(monkeypatch):
     async def fake_get_first_ok(paths, params):
         if "query" in params:
             return 200, {"data": [{"id": "nice-1", "name": "Nice"}]}, paths[0]
+        assert params["currency"] == "GBP"
         return (
             200,
             {
@@ -338,8 +339,10 @@ def test_flixbus_provider_status_and_mocked_search(monkeypatch):
     import asyncio
 
     assert asyncio.run(provider.station_search("Nice"))[0]["id"] == "nice-1"
+    provider.settings.default_currency = "GBP"
     offers = asyncio.run(provider.search_roundtrip("Nice", "Venise", "2026-07-30", "2026-08-02"))
     assert offers[0].actionable is True
+    assert offers[0].nights == 3
 
 
 def test_flixbus_status_disabled_states():
@@ -660,11 +663,13 @@ async def test_flixbus_openapi_uses_cache_before_autocomplete(tmp_path, monkeypa
             assert params["to_city_id"] == "paris-uuid"
             assert params["departure_date"] == "30.07.2026"
             assert params["products"] == '{"adult":1}'
+            assert params["number_adult"] == 1
+            assert params["currency"] == "GBP"
             return FakeResponse()
 
     monkeypatch.setattr("travel_scrapping.bus.flixbus_openapi.httpx.AsyncClient", lambda timeout, follow_redirects: FakeClient())
     provider = FlixBusOpenApiProvider(
-        Settings(_env_file=None, flixbus_openapi_enabled=True, flixbus_debug_save=False)
+        Settings(_env_file=None, flixbus_openapi_enabled=True, flixbus_debug_save=False, default_currency="GBP", adults=4)
     )
 
     offers = await provider.search_roundtrip("Nice", "Paris", "2026-07-30", "2026-08-02")

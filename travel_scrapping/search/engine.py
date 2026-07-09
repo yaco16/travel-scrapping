@@ -24,7 +24,7 @@ from travel_scrapping.search.providers.distribusion import DistribusionGroundTra
 from travel_scrapping.search.providers.playwright_probe import PlaywrightProbeProvider
 from travel_scrapping.search.providers.amadeus import AmadeusProvider
 from travel_scrapping.search.providers.ryanair import RyanairProvider
-from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightDealsProvider
+from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightDealsProvider, SerpApiGoogleFlightsProvider
 from travel_scrapping.search.providers.travelpayouts import TravelpayoutsProvider
 from travel_scrapping.search.scoring import sort_deals
 
@@ -50,6 +50,7 @@ def build_providers(settings: Settings, *, include_indicative: bool = False) -> 
     providers.append(RyanairProvider(settings))
     providers.append(AmadeusProvider(settings))
     providers.append(TravelpayoutsProvider(settings))
+    providers.append(SerpApiGoogleFlightsProvider(settings))
     providers.append(PlaywrightProbeProvider(settings))
     return providers
 
@@ -77,6 +78,13 @@ def main_reason(counter: Counter[str]) -> str | None:
         return None
     reason, count = counter.most_common(1)[0]
     return f"{reason} ({count})"
+
+
+def unique_best_deals(deals: list[DealCandidate]) -> list[DealCandidate]:
+    selected: dict[str, DealCandidate] = {}
+    for deal in sort_deals(deals):
+        selected.setdefault(deal.route_key, deal)
+    return list(selected.values())
 
 
 def provider_status_row(run_id: int, status) -> ProviderStatusRow:
@@ -163,7 +171,7 @@ async def run_search(
             provider_records: list[dict[str, object]] = []
 
             def publish_progress() -> None:
-                preview = sort_deals(all_deals)[: settings.top_results_limit]
+                preview = unique_best_deals(all_deals)[: settings.top_results_limit]
                 replace_run_deals(session, run, preview)
                 run.accepted_count = len(preview)
                 run.rejected_count = rejected + (len(all_deals) - len(preview))
@@ -267,7 +275,6 @@ async def run_search(
                     provider_records.append({"name": status.name, "enabled": status.enabled, "role": provider_role(status.name)})
                     if not status.enabled or not date_pairs:
                         continue
-                    outbound, ret, _nights = date_pairs[0]
                     bus_accepted = 0
                     bus_rejected = 0
                     bus_raw = 0
@@ -276,37 +283,39 @@ async def run_search(
                     bus_errors: list[str] = []
                     bus_attempted = False
                     bus_reasons: Counter[str] = Counter()
-                    for destination in destinations[: max(1, min(len(destinations), settings.top_results_limit))]:
-                        try:
-                            offers = await bus_provider.search_roundtrip(
-                                "Nice", destination.city, outbound.isoformat(), ret.isoformat()
-                            )
-                        except Exception as exc:
-                            rejected += 1
-                            bus_rejected += 1
-                            bus_reasons.update(["provider error"])
-                            bus_errors.append(scrub_text(str(exc))[:500])
-                            continue
-                        finally:
-                            bus_attempted = bus_attempted or bool(
-                                getattr(bus_provider, "last_attempted", False) or getattr(bus_provider, "last_path", None)
-                            )
-                            row.http_status = getattr(bus_provider, "last_status_code", row.http_status)
-                            bus_raw_total += int(getattr(bus_provider, "last_raw_count", 0) or 0)
-                            bus_normalized_total += int(getattr(bus_provider, "last_normalized_count", 0) or 0)
-                            if getattr(bus_provider, "last_error", None):
-                                bus_errors.append(scrub_text(bus_provider.last_error)[:500])
-                        bus_raw += len(offers)
-                        for offer in offers:
-                            deal = offer.to_deal_candidate()
-                            ok, reasons = validate_deal(deal, settings)
-                            if ok and deal.actionable:
-                                all_deals.append(deal)
-                                bus_accepted += 1
-                            else:
+                    bus_date_pairs = date_pairs[: max(1, settings.ground_max_date_pairs)]
+                    for outbound, ret, _nights in bus_date_pairs:
+                        for destination in destinations[: max(1, min(len(destinations), settings.top_results_limit))]:
+                            try:
+                                offers = await bus_provider.search_roundtrip(
+                                    "Nice", destination.city, outbound.isoformat(), ret.isoformat()
+                                )
+                            except Exception as exc:
                                 rejected += 1
                                 bus_rejected += 1
-                                bus_reasons.update(rejection_reasons(deal, reasons))
+                                bus_reasons.update(["provider error"])
+                                bus_errors.append(scrub_text(str(exc))[:500])
+                                continue
+                            finally:
+                                bus_attempted = bus_attempted or bool(
+                                    getattr(bus_provider, "last_attempted", False) or getattr(bus_provider, "last_path", None)
+                                )
+                                row.http_status = getattr(bus_provider, "last_status_code", row.http_status)
+                                bus_raw_total += int(getattr(bus_provider, "last_raw_count", 0) or 0)
+                                bus_normalized_total += int(getattr(bus_provider, "last_normalized_count", 0) or 0)
+                                if getattr(bus_provider, "last_error", None):
+                                    bus_errors.append(scrub_text(bus_provider.last_error)[:500])
+                            bus_raw += len(offers)
+                            for offer in offers:
+                                deal = offer.to_deal_candidate()
+                                ok, reasons = validate_deal(deal, settings)
+                                if ok and deal.actionable:
+                                    all_deals.append(deal)
+                                    bus_accepted += 1
+                                else:
+                                    rejected += 1
+                                    bus_rejected += 1
+                                    bus_reasons.update(rejection_reasons(deal, reasons))
                     if bus_errors:
                         row.ok = False
                         row.error = scrub_text("; ".join(dict.fromkeys(bus_errors)))[:500]
@@ -319,7 +328,7 @@ async def run_search(
                     row.request_params_json = json.dumps(getattr(bus_provider, "last_public_params", {}) or {})
                     row.destination_examples_json = json.dumps(getattr(bus_provider, "last_destination_examples", []) or [])
                     publish_progress()
-            sorted_deals = sort_deals(all_deals)[: settings.top_results_limit]
+            sorted_deals = unique_best_deals(all_deals)[: settings.top_results_limit]
             inserted = replace_run_deals(session, run, sorted_deals)
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
@@ -365,6 +374,7 @@ def provider_role(name: str) -> str:
         "serpapi_google_flights_deals": "primary",
         "serpapi": "detail_probe",
         "serpapi_google_flights": "detail_probe",
+        "serpapi_google_flights_targeted": "detail_probe",
         "ryanair": "primary",
         "amadeus": "primary",
         "travelpayouts": "optional",

@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     top_results_limit: int = 50
 
     serpapi_api_key: str = ""
+    serpapi_targeted_enabled: bool = True
+    serpapi_targeted_max_destinations: int = 8
+    serpapi_targeted_max_date_pairs: int = 3
     api_ninjas_api_key: str = ""
     airport_resolver_order: str = "cache,ourairports,ninja,fallback"
     ourairports_enabled: bool = True
@@ -55,6 +58,7 @@ class Settings(BaseSettings):
     travelpayouts_marker: str = ""
     include_indicative: bool = False
     bus_enabled: bool = True
+    ground_max_date_pairs: int = 3
     flixbus_enabled: bool = True
     rapidapi_key: str = ""
     flixbus_rapidapi_host: str = ""

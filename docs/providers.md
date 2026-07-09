@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | `serpapi_google_flights_deals` | `primary` | Recherche destination libre via Google Flight Deals. Provider avion principal. Appel strict `google_flights_deals`, parser `deals` uniquement. | Oui si clé présente et clé `deals` exploitable. |
 | `ryanair` | `primary` | Vols low-cost via `farfnd/v4/roundTripFares`, sans clé. `limit` API plafonné à 20 (voir section dédiée) : au-delà, HTTP 400 et 0 offre. | Oui si activé, pas d'heures de vol (dates seules). |
-| `serpapi_google_flights` / `serpapi` | `detail_probe` | Probe ciblé destination précise, pas provider principal pour `anywhere`. | Non, diagnostics avancés seulement. |
+| `serpapi_google_flights_targeted` | `detail_probe` | Probes ciblés destination+dates via `google_flights`, bornés par configuration, avec `deep_search=true`. Complète Deals sans relâcher les critères. | Oui si clé présente et résultat actionnable. |
 | `travelpayouts` | `optional` | Prix indicatifs/cachés. Désactivé si `TRAVELPAYOUTS_MARKER` absent. | Non si marker absent ou aucune offre actionnable. |
 | `comparabus` | `optional` | Bus via API publique ComparaBUS: stops, routes, prix, redirect affilié. | Oui seulement si stop non ambigu, route bus, prix et lien redirect explicite. |
 | `flixbus` / `flixbus_rapidapi` | `optional` | Bus via RapidAPI. Désactivé par défaut côté UX si `403/429` ou clé/quota inexploitable. | Non si rate-limit/abonnement bloque. |
@@ -71,6 +71,8 @@ ComparaBUS fonctionne comme méta-comparateur: recherche de stops, découverte d
 
 Décision: provider optionnel bus-only, activé par défaut. Aucune offre n'est créée si le stop est ambigu, si aucune route bus n'existe, si le prix manque ou si le champ `link` nécessaire au redirect manque. La confiance reste `medium` car l'API n'est pas contractuelle.
 
+Audit critères 2026-07-09: origine bus volontairement fixe `Nice`; le moteur teste désormais plusieurs paires de dates via `GROUND_MAX_DATE_PAIRS` au lieu de la première paire seulement. La devise envoyée suit `DEFAULT_CURRENCY`; l'affichage final doit rester en EUR ou convertir explicitement avant persistance.
+
 ### Distribusion
 
 Recommandation: candidat prioritaire futur pour bus + train Europe.
@@ -111,6 +113,8 @@ Diagnostic utile:
 
 Alternative recommandée: Distribusion avec accès demo/sandbox et documentation contractuelle pour bus/train Europe.
 
+Audit critères 2026-07-09: `number_adult=1` et `products={"adult":1}` restent fixes par décision produit; `currency` suit `DEFAULT_CURRENCY`; la date de recherche vient des paires générées par les critères et bornées par `GROUND_MAX_DATE_PAIRS`.
+
 ### Transitland/GTFS
 
 Utile pour découvrir opérateurs, routes, arrêts et horaires. Pas source de prix ni de réservation.
@@ -141,13 +145,15 @@ Provider avion `ryanair` (`travel_scrapping/search/providers/ryanair.py`), sans 
 
 Endpoint: `GET https://services-api.ryanair.com/farfnd/v4/roundTripFares`.
 
-Paramètres envoyés: `departureAirportIataCode`, `outboundDepartureDateFrom/To`, `inboundDepartureDateFrom/To` (bornées par `min_nights`/`max_nights` autour de la fenêtre de recherche), `durationFrom`/`durationTo` (= `min_nights`/`max_nights`, ajoutés pour éviter que l'API renvoie des couples aller/retour hors de la plage de nuits demandée), `language=fr`, `limit`, `maxPrice`, `offset=0`, `currency`.
+Paramètres envoyés: `departureAirportIataCode`, `outboundDepartureDateFrom/To`, `inboundDepartureDateFrom/To` (bornées par `min_nights`/`max_nights` autour de la fenêtre de recherche), `durationFrom`/`durationTo` (= `min_nights`/`max_nights`, ajoutés pour éviter que l'API renvoie des couples aller/retour hors de la plage de nuits demandée), `language=<default_locale>`, `limit`, `maxPrice`, `offset=0`, `currency`.
 
 **Bug trouvé et corrigé le 2026-07-08** : `limit` était envoyé comme `min(settings.top_results_limit, 100)`, soit 50 par défaut. L'API rejette silencieusement toute valeur de `limit` supérieure à 20 avec `HTTP 400 {"code":"InvalidLimit","message":"Invalid limit"}`. Résultat : **toutes** les requêtes Ryanair échouaient depuis l'ajout du provider (024), donnant 0 offre avion en pratique quel que soit le budget/dates demandés. Vérifié en direct par curl sur l'endpoint réel : `limit<=20` → HTTP 200, `limit>=21` → HTTP 400, quel que soit `maxPrice`/`durationFrom`/`durationTo`. Corrigé par une constante `RYANAIR_MAX_LIMIT = 20` et `limit=min(limit, RYANAIR_MAX_LIMIT)`.
 
 Comportement observé même après correction : sur NCE avec une fenêtre de dates large (ex. 10 juil.-31 août, 1-7 nuits, ≤150€), l'endpoint ne renvoie que quelques offres (`size` dans la réponse, ex. 2), y compris en relâchant `maxPrice` ou en retirant `durationFrom`/`durationTo`. L'endpoint semble renvoyer au plus une poignée de meilleures offres par destination sur toute la fenêtre demandée, pas une liste exhaustive par date — c'est structurel côté API, pas un bug du provider. Ça explique une partie de l'écart avec le nombre d'offres visibles sur l'UI Google Flights (qui agrège bien plus de compagnies/OTA).
 
 Parsing (`_parse_fares`) : `is_direct=True` toujours forcé (Ryanair via cet endpoint est présenté en direct uniquement), pas de correspondance/segment détaillé. Seule la date de départ/retour est disponible (`departureDate`), jamais d'heure — `outbound_departure_at`/`outbound_arrival_at` restent `None` pour ce provider (cf. frise horaire sur les vignettes, qui affiche alors "Horaire non communiqué").
+
+Audit critères 2026-07-09: dates, nuits, budget, devise demandée et langue utilisent les settings. `limit` reste plafonné par `RYANAIR_MAX_LIMIT=20` car limite fournisseur. `adults=1` reste fixe par décision produit.
 
 ## Google Flight Deals
 
@@ -181,7 +187,9 @@ Exemples acceptés observés depuis NCE avec fenêtre effective `2026-07-09,2026
 
 Investigation complémentaire 2026-07-09: SerpApi Deals renvoie souvent des offres hors de l'ancienne fin fixe `2026-08-31`. Avec la même requête mais `depart_to=2026-12-31`, le smoke passe de 4 à 25 offres acceptées, sans relâcher budget, nuits ni escales. Le défaut app est donc passé à un horizon glissant de 180 jours.
 
-Les anciennes cibles `SVQ`, `STN`, `FCO` restent absentes de `google_flights_deals`, mais les probes ciblés `google_flights` retrouvent des vols: `SVQ` 1 résultat, `STN` 1 résultat, `FCO` 6 résultats. Piste: utiliser `serpapi_google_flights` comme probe ciblé sur destinations/dates déjà identifiées, pas comme provider destination libre.
+Les anciennes cibles `SVQ`, `STN`, `FCO` restent absentes de `google_flights_deals`, mais les probes ciblés `google_flights` retrouvent des vols: `SVQ` 1 résultat, `STN` 1 résultat, `FCO` 6 résultats.
+
+Provider complémentaire ajouté: `serpapi_google_flights_targeted`. Il interroge `engine=google_flights` sur un nombre limité de destinations de `config/destinations.yaml` et de paires de dates générées localement, avec `deep_search=true`, `show_hidden=true`, `stops=max_stops+1`, puis laisse les filtres locaux rejeter budget/nuits/dates/escales hors critères. Paramètres de coût: `SERPAPI_TARGETED_ENABLED`, `SERPAPI_TARGETED_MAX_DESTINATIONS`, `SERPAPI_TARGETED_MAX_DATE_PAIRS`. Ce provider ne fait pas de destination libre et ne crée aucune offre si SerpApi ne fournit pas prix, opérateur et booking explicite. `adults=1` reste fixe par décision produit.
 
 ## Décision
 

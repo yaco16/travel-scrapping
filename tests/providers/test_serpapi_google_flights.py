@@ -233,6 +233,7 @@ async def test_google_flight_deals_provider_search_uses_strict_deals_params(tmp_
             serpapi_api_key="secret",
             search_start_date=date(2026, 7, 1),
             search_end_date=date(2026, 8, 31),
+            adults=4,
         )
     )
     deals = await provider.search([], [], limit=10)
@@ -243,6 +244,7 @@ async def test_google_flight_deals_provider_search_uses_strict_deals_params(tmp_
     assert sent["trip_length"] == "1,7"
     assert sent["max_price"] == "150"
     assert sent["stops"] == "2"
+    assert sent["adults"] == "1"
     assert "return_date" not in sent
     assert "arrival_id" not in sent
     assert deals[0].destination_city == "Séville"
@@ -403,6 +405,54 @@ async def test_serpapi_search_mocked():
     provider = SerpApiGoogleFlightsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
     deals = await provider.search([Destination("BCN", "Barcelona", "Spain")], [(date(2026, 7, 1), date(2026, 7, 4), 3)], limit=1)
     assert deals[0].destination_airport == "BCN"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_serpapi_targeted_search_is_bounded_and_uses_settings_stops():
+    respx.get("https://serpapi.com/search.json").mock(
+        return_value=Response(
+            200,
+            json={
+                "best_flights": [
+                    {
+                        "price": 30,
+                        "destination_airport": "BCN",
+                        "outbound_date": "2026-07-01",
+                        "return_date": "2026-07-04",
+                        "airline": "easyJet",
+                        "booking_options": [{"link": "https://example.test/book"}],
+                    }
+                ]
+            },
+        )
+    )
+    provider = SerpApiGoogleFlightsProvider(
+        Settings(
+            _env_file=None,
+            serpapi_api_key="secret",
+            serpapi_targeted_max_destinations=1,
+            serpapi_targeted_max_date_pairs=2,
+            max_stops=1,
+            adults=4,
+        )
+    )
+    destinations = [Destination("BCN", "Barcelona", "Spain"), Destination("FCO", "Rome", "Italy")]
+    date_pairs = [
+        (date(2026, 7, 1), date(2026, 7, 4), 3),
+        (date(2026, 7, 2), date(2026, 7, 5), 3),
+        (date(2026, 7, 3), date(2026, 7, 6), 3),
+    ]
+
+    deals = await provider.search(destinations, date_pairs, limit=10)
+
+    assert len(deals) == 2
+    assert len(respx.calls) == 2
+    assert provider.last_public_params["attempts"] == 2
+    assert provider.last_public_params["max_destinations"] == 1
+    assert provider.last_public_params["max_date_pairs"] == 2
+    assert provider.last_public_params["stops"] == "2"
+    assert provider.last_public_params["adults"] == 1
 
 
 @pytest.mark.asyncio

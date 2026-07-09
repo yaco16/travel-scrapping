@@ -353,6 +353,7 @@ def provider_role(name: str) -> str:
         "serpapi_google_flights_deals": "primary",
         "serpapi": "detail_probe",
         "serpapi_google_flights": "detail_probe",
+        "serpapi_google_flights_targeted": "detail_probe",
         "travelpayouts": "optional",
         "flixbus": "optional",
         "flixbus_rapidapi": "optional",

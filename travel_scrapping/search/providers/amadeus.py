@@ -125,6 +125,7 @@ class AmadeusProvider(FlightProvider):
             origin=self.settings.origin_airport,
             min_nights=self.settings.min_nights,
             max_nights=self.settings.max_nights,
+            currency=self.settings.default_currency,
         )
         self.last_normalized_count = len(deals)
         self.last_destination_examples = [d.destination_airport for d in deals[:5]]
@@ -132,7 +133,12 @@ class AmadeusProvider(FlightProvider):
 
 
 def _parse_inspire(
-    data: list[dict[str, Any]], *, origin: str, min_nights: int = 1, max_nights: int = 7
+    data: list[dict[str, Any]],
+    *,
+    origin: str,
+    min_nights: int = 1,
+    max_nights: int = 7,
+    currency: str = "EUR",
 ) -> list[DealCandidate]:
     deals: list[DealCandidate] = []
     for item in data:
@@ -168,7 +174,7 @@ def _parse_inspire(
                     return_date=ret_date,
                     nights=nights,
                     total_price=price_val,
-                    currency="EUR",
+                    currency=str(item.get("currency") or currency),
                     airlines=[],
                     booking_url=booking_url,
                     raw_payload=scrub_payload(item),

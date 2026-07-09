@@ -55,6 +55,7 @@ class TravelpayoutsProvider(FlightProvider):
                 response.json(),
                 origin=self.settings.origin_airport,
                 marker=self.settings.travelpayouts_marker,
+                currency=self.settings.default_currency,
             )
 
 
@@ -93,7 +94,9 @@ def build_aviasales_deep_link(
     )
 
 
-def parse_travelpayouts_payload(payload: dict[str, Any], *, origin: str, marker: str | None = None) -> list[DealCandidate]:
+def parse_travelpayouts_payload(
+    payload: dict[str, Any], *, origin: str, marker: str | None = None, currency: str = "EUR"
+) -> list[DealCandidate]:
     deals: list[DealCandidate] = []
     for row in payload.get("data", []):
         try:
@@ -134,7 +137,7 @@ def parse_travelpayouts_payload(payload: dict[str, Any], *, origin: str, marker:
                     return_date=return_date,
                     nights=(return_date - outbound).days,
                     total_price=float(row["value"]),
-                    currency=row.get("currency", "EUR"),
+                    currency=str(row.get("currency") or currency),
                     airlines=airlines,
                     booking_url=booking_url,
                     raw_payload=scrub_payload(row),

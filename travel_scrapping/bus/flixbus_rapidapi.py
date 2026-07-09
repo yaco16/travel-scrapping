@@ -86,13 +86,19 @@ class FlixBusRapidApiProvider(BusProvider):
                 "destination": destination,
                 "departure_date": depart,
                 "return_date": ret,
-                "currency": "EUR",
+                "currency": self.settings.default_currency,
             },
         )
         debug_path = save_bus_debug(payload, prefix="flixbus-search") if self.settings.flixbus_debug_save else None
         if status >= 400:
             return []
-        return parse_trips(payload, origin=origin, destination=destination, raw_debug_path=debug_path)
+        return parse_trips(
+            payload,
+            origin=origin,
+            destination=destination,
+            return_at=_parse_return_at(ret),
+            raw_debug_path=debug_path,
+        )
 
 
 def _payload_error(payload: dict[str, Any] | list[Any]) -> str | None:
@@ -109,3 +115,13 @@ def save_bus_debug(payload: dict[str, Any] | list[Any], *, prefix: str) -> str:
     safe_payload = scrub_payload(payload) if isinstance(payload, dict) else payload
     path.write_text(json.dumps(safe_payload, indent=2, ensure_ascii=True), encoding="utf-8")
     return str(path)
+
+
+def _parse_return_at(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed

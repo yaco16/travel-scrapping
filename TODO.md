@@ -1,5 +1,41 @@
 # TODO
 
+## Corrections faites (2026-07-09, audit criteres provider tous transports)
+
+- Agent: Codex.
+- Correction: audit des requetes provider pour eviter criteres figes non voulus. Corrige: Ryanair utilise dates/nuits/budget/devise/langue depuis settings; Amadeus conserve devise provider dans les deals; Travelpayouts accepte une devise fallback configurable; SerpApi garde `adults=1` fixe mais utilise market/locale configurables; ComparaBUS/FlixBus utilisent la devise configuree quand l'API l'accepte; le moteur bus teste maintenant plusieurs paires de dates via `GROUND_MAX_DATE_PAIRS` au lieu de seulement la premiere paire.
+- Cause racine: certains providers avaient des valeurs métier codees en dur (`currency=EUR` bus, premiere paire de dates bus seulement, langue Ryanair fixe) et le nouveau probe SerpApi risquait de suivre `settings.adults`.
+- Restrictions/blocages: depart `Nice` et passager unique restent volontairement fixes, decision utilisateur. Aucun taux de change invente: une offre non-EUR doit etre convertie avec une source fiable/table explicite avant affichage/persistance; sinon le filtre actuel `non-EUR price without conversion` reste valable.
+- Pistes: ajouter une tranche conversion devise EUR (source de taux explicite) si une API retourne des prix non-EUR malgre demande EUR; surveiller cout `GROUND_MAX_DATE_PAIRS * destinations * providers`.
+- Checks: `pytest tests/providers/test_ryanair.py tests/providers/test_serpapi_google_flights.py tests/test_bus.py tests/test_engine.py tests/test_web.py -q`; `ruff check` fichiers modifies; `pyright`; `git diff --check`.
+
+## Corrections faites (2026-07-09, probes avion cibles SerpApi)
+
+- Agent: Codex.
+- Correction: ajout du provider `serpapi_google_flights_targeted` dans la recherche avion. Il lance des probes `engine=google_flights` bornés par `SERPAPI_TARGETED_MAX_DESTINATIONS` et `SERPAPI_TARGETED_MAX_DATE_PAIRS`, avec `deep_search=true`, puis les filtres locaux gardent uniquement les offres respectant les critères existants. Dédoublonnage par route/date pour garder la meilleure offre.
+- Cause racine: `google_flights_deals` est un flux deals non exhaustif; certaines destinations (`SVQ`, `STN`, `FCO`) existent via `google_flights` ciblé mais pas dans Deals.
+- Restrictions/blocages: coût SerpApi proportionnel à `destinations * date_pairs`; pas de destination libre dans ce provider; aucune offre créée sans prix, opérateur et lien booking explicite; résultats Google Flights UI toujours non garantis identiques malgré `deep_search`.
+- Pistes: observer les diagnostics provider après quelques runs réels; ajuster les deux limites de probes; prioriser ensuite accès `Distribusion` pour bus/train réservables.
+- Checks: `pytest tests/providers/test_serpapi_google_flights.py tests/test_engine.py tests/test_web.py -q`; `ruff check` fichiers Python modifies; `pyright`; `git diff --check`.
+
+## Investigation faite (2026-07-09, sources bus locales hors FlixBus/BlaBlaCar)
+
+- Agent: Codex.
+- Correction: aucune modification code. Verdict: des reseaux locaux existent autour de Nice (`Zou!`, `Lignes d'Azur`, CAM Monaco, Envibus/Palm Bus/Zestbus via donnees regionales), mais ils fournissent surtout horaires/arrets GTFS/NeTEx/SIRI, pas offres prix + lien reservation exploitables comme deal. Pour resultats actionnables, priorite a `Distribusion` ou autre agregrateur contractuel bus/train; `ComparaBUS` reste utile pour decouvrir transporteurs par route.
+- Cause racine: providers locaux = transport public subventionne/local, non moteur de vente longue distance; les compagnies longues distances hors FlixBus/BlaBlaCar depuis Nice doivent etre verifiees route par route et n'ont pas toujours API publique stable.
+- Restrictions/blocages: ne pas creer d'offre sans prix et lien explicite; open data transport.data.gouv.fr utile pour horaires, pas booking; acces Distribusion requis; API directes ALSA/MarinoBus/Itabus/Union Ivkoni non confirmees comme publiques.
+- Pistes: ajouter une tranche `ground_public_feeds` pour enrichir horaires locaux sans prix, et une tranche `distribusion_live` pour offres reservables bus/train.
+- Checks: lecture docs projet + recherche web officielle/ouverte; aucun test lance car aucune modification code.
+
+## Investigation faite (2026-07-09, augmenter resultats avion sans relacher criteres)
+
+- Agent: Codex.
+- Correction: aucune modification code. Verdict produit: l'ecart avec Google Flights vient surtout de `google_flights_deals`, flux deals cible et non exhaustif. Solution proposee: garder Deals pour decouvrir destinations/dates, puis lancer des probes cibles `serpapi_google_flights` sur destinations pertinentes + dates exactes issues des deals, de l'historique et de `config/destinations.yaml`, avec `deep_search=true`, puis dedoublonner et filtrer avec les criteres existants.
+- Cause racine: Google Flights UI combine recherche flexible, appels progressifs et fournisseurs plus larges; l'app limite le provider principal a un seul appel Deals strict. Les probes live deja notes montrent `SVQ`, `STN`, `FCO` presents via `google_flights` mais absents de Deals.
+- Restrictions/blocages: ne pas inventer de destinations/offres; cout SerpApi plus eleve car plusieurs appels route/date; Skyscanner Live Prices est contractuel/partenaire et necessite acces; Amadeus abandonne; scraping UI fragile hors perimetre.
+- Pistes: prochaine tranche concrete = provider secondaire `serpapi_google_flights_targeted` optionnel, budgete par nombre max de destinations et dates, actif apres Deals/Travelpayouts/Ryanair, avec diagnostic cout/resultats.
+- Checks: lecture sources projet + docs SerpApi/Skyscanner; aucun test lance car aucune modification code.
+
 ## Corrections faites (2026-07-09, horizon SerpApi Deals)
 
 - Agent: Codex.

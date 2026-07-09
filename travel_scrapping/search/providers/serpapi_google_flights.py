@@ -39,7 +39,7 @@ class SerpApiSmokeResult:
 
 
 class SerpApiGoogleFlightsProvider(FlightProvider):
-    name = "serpapi"
+    name = "serpapi_google_flights_targeted"
 
     def __init__(self, settings) -> None:
         super().__init__(settings)
@@ -47,8 +47,14 @@ class SerpApiGoogleFlightsProvider(FlightProvider):
         self.last_status_code: int | None = None
         self.last_raw_count = 0
         self.last_normalized_count = 0
+        self.last_public_params: dict[str, Any] = {}
+        self.last_destination_examples: list[str] = []
+        self.last_ok = True
+        self.last_error: str | None = None
 
     def status(self) -> ProviderStatus:
+        if not self.settings.serpapi_targeted_enabled:
+            return ProviderStatus(self.name, enabled=False, warnings=["SERPAPI targeted probes disabled"], key_present=bool(self.settings.serpapi_api_key))
         if not self.settings.serpapi_api_key:
             return ProviderStatus(self.name, enabled=False, warnings=["SERPAPI_API_KEY missing"], key_present=False)
         return ProviderStatus(self.name, enabled=True, key_present=True)
@@ -63,9 +69,23 @@ class SerpApiGoogleFlightsProvider(FlightProvider):
         if not self.status().enabled:
             return []
         deals: list[DealCandidate] = []
+        max_destinations = max(0, int(self.settings.serpapi_targeted_max_destinations))
+        max_date_pairs = max(0, int(self.settings.serpapi_targeted_max_date_pairs))
+        if max_destinations == 0 or max_date_pairs == 0:
+            self.last_public_params = {
+                "engine": "google_flights",
+                "diagnostic": "Probes ciblés SerpApi désactivés par limite 0.",
+                "max_destinations": max_destinations,
+                "max_date_pairs": max_date_pairs,
+            }
+            return []
+        attempts = 0
+        last_params: dict[str, Any] = {}
+        self.last_ok = True
+        self.last_error = None
         async with httpx.AsyncClient(timeout=30) as client:
-            for destination in destinations[: max(1, min(len(destinations), limit))]:
-                for outbound, ret, _nights in date_pairs[:1]:
+            for destination in destinations[: max_destinations]:
+                for outbound, ret, _nights in date_pairs[:max_date_pairs]:
                     params = serpapi_base_params(
                         api_key=self.settings.serpapi_api_key,
                         origin=self.settings.origin_airport,
@@ -73,10 +93,15 @@ class SerpApiGoogleFlightsProvider(FlightProvider):
                         depart=outbound,
                         ret=ret,
                         currency=self.settings.default_currency,
-                        adults=self.settings.adults,
+                        adults=1,
                         bags=self.settings.checked_bags,
+                        max_stops=self.settings.max_stops,
+                        market=self.settings.default_market,
+                        locale=self.settings.default_locale,
                     )
+                    last_params = public_params(params)
                     self.last_attempted = True
+                    attempts += 1
                     response = await client.get(SERPAPI_URL, params=params)
                     self.last_status_code = response.status_code
                     response.raise_for_status()
@@ -93,12 +118,30 @@ class SerpApiGoogleFlightsProvider(FlightProvider):
                         destination=destination.airport,
                         outbound=outbound,
                         ret=ret,
+                        source_name=self.name,
                     )
                     self.last_normalized_count += len(parsed)
                     deals.extend(parsed)
+                    self.last_destination_examples = destination_examples(deals)
                     await asyncio.sleep(0.2)
                     if len(deals) >= limit:
+                        self.last_public_params = {
+                            **last_params,
+                            "attempts": attempts,
+                            "max_destinations": max_destinations,
+                            "max_date_pairs": max_date_pairs,
+                            "raw_count": self.last_raw_count,
+                            "normalized_count": self.last_normalized_count,
+                        }
                         return deals[:limit]
+        self.last_public_params = {
+            **last_params,
+            "attempts": attempts,
+            "max_destinations": max_destinations,
+            "max_date_pairs": max_date_pairs,
+            "raw_count": self.last_raw_count,
+            "normalized_count": self.last_normalized_count,
+        }
         return deals
 
 
@@ -143,7 +186,9 @@ class SerpApiGoogleFlightDealsProvider(FlightProvider):
             max_price=int(self.settings.max_roundtrip_price_eur),
             max_stops=self.settings.max_stops,
             currency=self.settings.default_currency,
-            adults=self.settings.adults,
+            adults=1,
+            market=self.settings.default_market,
+            locale=self.settings.default_locale,
         )
         self.last_ok = True
         self.last_error = None
@@ -225,6 +270,9 @@ def serpapi_base_params(
     currency: str = "EUR",
     adults: int = 1,
     bags: int = 0,
+    max_stops: int = 1,
+    market: str = "FR",
+    locale: str = "fr-FR",
 ) -> dict[str, Any]:
     return {
         "engine": "google_flights",
@@ -234,11 +282,11 @@ def serpapi_base_params(
         "outbound_date": depart.isoformat() if isinstance(depart, date) else depart,
         "return_date": ret.isoformat() if isinstance(ret, date) else ret,
         "currency": currency,
-        "hl": "fr",
-        "gl": "fr",
+        "hl": language_code(locale),
+        "gl": market.lower(),
         "adults": adults,
         "bags": bags,
-        "stops": "1",
+        "stops": str(max_stops + 1),
         "show_hidden": "true",
         "deep_search": "true",
         "api_key": api_key,
@@ -261,6 +309,8 @@ def serpapi_deals_params(
     max_stops: int,
     currency: str = "EUR",
     adults: int = 1,
+    market: str = "FR",
+    locale: str = "fr-FR",
 ) -> dict[str, Any]:
     start = outbound_start.isoformat() if isinstance(outbound_start, date) else outbound_start
     end = outbound_end.isoformat() if isinstance(outbound_end, date) else outbound_end
@@ -273,11 +323,15 @@ def serpapi_deals_params(
         "max_price": str(max_price),
         "stops": str(max_stops + 1),
         "currency": currency,
-        "gl": "fr",
-        "hl": "fr",
+        "gl": market.lower(),
+        "hl": language_code(locale),
         "adults": adults,
         "api_key": api_key,
     }
+
+
+def language_code(locale: str) -> str:
+    return (locale or "fr").replace("_", "-").split("-", 1)[0].lower() or "fr"
 
 
 def public_params(params: dict[str, Any]) -> dict[str, Any]:
@@ -494,6 +548,7 @@ def parse_serpapi_payload(
     destination: str | None = None,
     outbound: date | None = None,
     ret: date | None = None,
+    source_name: str = "serpapi",
 ) -> list[DealCandidate]:
     items: list[dict[str, Any]] = []
     for key in ("best_flights", "other_flights", "flights"):
@@ -531,8 +586,8 @@ def parse_serpapi_payload(
                 missing.append("price_amount")
             deals.append(
                 DealCandidate(
-                    source="serpapi",
-                    provider="serpapi",
+                    source=source_name,
+                    provider=source_name,
                     origin_airport=origin,
                     destination_airport=destination_code,
                     destination_city=item.get("destination_city"),

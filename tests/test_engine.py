@@ -241,7 +241,9 @@ async def test_run_search_flight_bus_keeps_flight_results_when_bus_empty(tmp_pat
         bus_enabled=True,
         distribusion_enabled=False,
         rapidapi_key="secret",
+        ground_max_date_pairs=2,
     )
+    bus_calls: list[tuple[str, str, str, str]] = []
 
     class EmptyBusProvider:
         name = "empty_bus"
@@ -259,6 +261,7 @@ async def test_run_search_flight_bus_keeps_flight_results_when_bus_empty(tmp_pat
             return ProviderStatus(self.name, enabled=True)
 
         async def search_roundtrip(self, origin, destination, depart, ret):
+            bus_calls.append((origin, destination, depart, ret))
             return []
 
     monkeypatch.setattr(
@@ -268,6 +271,7 @@ async def test_run_search_flight_bus_keeps_flight_results_when_bus_empty(tmp_pat
     monkeypatch.setattr("travel_scrapping.search.engine.ComparabusProvider", EmptyBusProvider)
     monkeypatch.setattr("travel_scrapping.search.engine.FlixBusOpenApiProvider", EmptyBusProvider)
     monkeypatch.setattr("travel_scrapping.search.engine.FlixBusRapidApiProvider", EmptyBusProvider)
+    monkeypatch.setattr("travel_scrapping.search.engine.load_destinations", lambda: [Destination("VCE", "Venise", "IT")])
 
     run_id = await run_search(settings, modes="flight,bus")
 
@@ -283,6 +287,9 @@ async def test_run_search_flight_bus_keeps_flight_results_when_bus_empty(tmp_pat
     assert [row.name for row in statuses] == ["flight_ok", "distribusion", "empty_bus", "empty_bus", "empty_bus"]
     assert statuses[0].accepted_count == 1
     assert statuses[2].raw_count == 0
+    assert len(bus_calls) == 6
+    assert {call[0] for call in bus_calls} == {"Nice"}
+    assert len({(call[2], call[3]) for call in bus_calls}) == 2
 
 
 @pytest.mark.asyncio
@@ -471,6 +478,7 @@ async def test_run_search_bus_records_last_error_and_rejected_offer(tmp_path, mo
         date_to=date.today().replace(year=date.today().year + 1),
         rapidapi_key="secret",
         top_results_limit=1,
+        ground_max_date_pairs=1,
     )
     monkeypatch.setattr(
         "travel_scrapping.search.engine.load_destinations",

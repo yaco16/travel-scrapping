@@ -195,7 +195,7 @@ class FlixBusOpenApiProvider(BusProvider):
                 "number_adult": 1,
                 "products": json.dumps({"adult": 1}, separators=(",", ":")),
                 "search_by": "cities",
-                "currency": "EUR",
+                "currency": self.settings.default_currency,
             }
             self.last_path = FLIXBUS_SEARCH_URL
             self.last_attempted = True
