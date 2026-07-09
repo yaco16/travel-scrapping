@@ -8,6 +8,7 @@ from travel_scrapping.config import Settings
 from travel_scrapping.schemas import Destination
 from travel_scrapping.search.providers.serpapi_google_flights import (
     SerpApiGoogleFlightDealsProvider,
+    SerpApiGoogleFlightsAirlineProvider,
     SerpApiGoogleFlightsProvider,
     count_tokens,
     parse_google_flight_deals_payload,
@@ -453,6 +454,52 @@ async def test_serpapi_targeted_search_is_bounded_and_uses_settings_stops():
     assert provider.last_public_params["max_date_pairs"] == 2
     assert provider.last_public_params["stops"] == "2"
     assert provider.last_public_params["adults"] == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_serpapi_airline_targeted_search_uses_easyjet_volotea_filters():
+    respx.get("https://serpapi.com/search.json").mock(
+        return_value=Response(
+            200,
+            json={
+                "best_flights": [
+                    {
+                        "price": 42,
+                        "destination_airport": "BCN",
+                        "outbound_date": "2026-07-01",
+                        "return_date": "2026-07-04",
+                        "airline": "Volotea",
+                        "booking_options": [{"link": "https://example.test/book"}],
+                    }
+                ]
+            },
+        )
+    )
+    provider = SerpApiGoogleFlightsAirlineProvider(
+        Settings(
+            _env_file=None,
+            serpapi_api_key="secret",
+            serpapi_airline_targeted_codes="U2,V7",
+            serpapi_airline_targeted_max_destinations=1,
+            serpapi_airline_targeted_max_date_pairs=1,
+        )
+    )
+    destinations = [Destination("BCN", "Barcelona", "Spain"), Destination("FCO", "Rome", "Italy")]
+    date_pairs = [
+        (date(2026, 7, 1), date(2026, 7, 4), 3),
+        (date(2026, 7, 2), date(2026, 7, 5), 3),
+    ]
+
+    deals = await provider.search(destinations, date_pairs, limit=10)
+
+    assert len(deals) == 2
+    assert len(respx.calls) == 2
+    assert [call.request.url.params["include_airlines"] for call in respx.calls] == ["U2", "V7"]
+    assert provider.last_public_params["airline_codes"] == ["U2", "V7"]
+    assert provider.last_public_params["max_destinations"] == 1
+    assert provider.last_public_params["max_date_pairs"] == 1
+    assert provider.last_public_params["include_airlines"] == "V7"
 
 
 @pytest.mark.asyncio

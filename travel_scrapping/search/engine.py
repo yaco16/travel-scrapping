@@ -24,7 +24,11 @@ from travel_scrapping.search.providers.distribusion import DistribusionGroundTra
 from travel_scrapping.search.providers.playwright_probe import PlaywrightProbeProvider
 from travel_scrapping.search.providers.amadeus import AmadeusProvider
 from travel_scrapping.search.providers.ryanair import RyanairProvider
-from travel_scrapping.search.providers.serpapi_google_flights import SerpApiGoogleFlightDealsProvider, SerpApiGoogleFlightsProvider
+from travel_scrapping.search.providers.serpapi_google_flights import (
+    SerpApiGoogleFlightDealsProvider,
+    SerpApiGoogleFlightsAirlineProvider,
+    SerpApiGoogleFlightsProvider,
+)
 from travel_scrapping.search.providers.travelpayouts import TravelpayoutsProvider
 from travel_scrapping.search.scoring import sort_deals
 
@@ -51,6 +55,7 @@ def build_providers(settings: Settings, *, include_indicative: bool = False) -> 
     providers.append(AmadeusProvider(settings))
     providers.append(TravelpayoutsProvider(settings))
     providers.append(SerpApiGoogleFlightsProvider(settings))
+    providers.append(SerpApiGoogleFlightsAirlineProvider(settings))
     providers.append(PlaywrightProbeProvider(settings))
     return providers
 
@@ -375,6 +380,7 @@ def provider_role(name: str) -> str:
         "serpapi": "detail_probe",
         "serpapi_google_flights": "detail_probe",
         "serpapi_google_flights_targeted": "detail_probe",
+        "serpapi_google_flights_airlines": "detail_probe",
         "ryanair": "primary",
         "amadeus": "primary",
         "travelpayouts": "optional",

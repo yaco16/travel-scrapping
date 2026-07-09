@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     serpapi_targeted_enabled: bool = True
     serpapi_targeted_max_destinations: int = 8
     serpapi_targeted_max_date_pairs: int = 3
+    serpapi_airline_targeted_enabled: bool = True
+    serpapi_airline_targeted_codes: str = "U2,V7"
+    serpapi_airline_targeted_max_destinations: int = 12
+    serpapi_airline_targeted_max_date_pairs: int = 3
     api_ninjas_api_key: str = ""
     airport_resolver_order: str = "cache,ourairports,ninja,fallback"
     ourairports_enabled: bool = True

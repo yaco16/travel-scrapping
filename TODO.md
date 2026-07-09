@@ -1,5 +1,41 @@
 # TODO
 
+## Corrections faites (2026-07-09, libelle trajet bus detail)
+
+- Agent: Codex.
+- Correction: page `/deal/{id}` affiche maintenant les stations bus issues du payload fournisseur dans le sous-titre du trajet, au lieu des IDs internes `origin_airport`/`destination_airport` pour les offres bus.
+- Cause racine: les deals bus ComparaBUS stockent des IDs de stops (`336`, `9`) dans les champs historiques nommes `*_airport`; le template detail les affichait directement.
+- Restrictions/blocages: fallback conserve vers les IDs si le payload fournisseur ne contient pas de nom de station; aucune donnee station inventee.
+- Pistes: factoriser un helper route display partage si d'autres templates reutilisent encore `origin_airport -> destination_airport` pour bus.
+- Checks: `pytest tests/test_web.py tests/test_presentation.py tests/providers/test_serpapi_google_flights.py tests/test_engine.py -q`; `ruff check` fichiers Python modifies; `pyright`; `git diff --check`.
+
+## Corrections faites (2026-07-09, probes EasyJet Volotea)
+
+- Agent: Codex.
+- Correction: ajout du provider `serpapi_google_flights_airlines`, branché après les probes SerpApi génériques. Il interroge `google_flights` avec `include_airlines=U2` puis `include_airlines=V7`, borné par `SERPAPI_AIRLINE_TARGETED_MAX_DESTINATIONS` et `SERPAPI_AIRLINE_TARGETED_MAX_DATE_PAIRS`; valeurs par défaut: `U2,V7`, 12 destinations, 3 paires de dates.
+- Cause racine: Google Flights UI expose EasyJet/Volotea via recherche plus large; l'app ne forçait pas ces compagnies et les probes génériques étaient trop bornés pour les faire ressortir.
+- Restrictions/blocages: pas de provider direct EasyJet/Volotea ni contournement anti-bot; aucune offre créée sans payload SerpApi exploitable avec prix, opérateur et lien réservation. Coût SerpApi ajouté: `codes * destinations * date_pairs`.
+- Pistes: observer diagnostics live `serpapi_google_flights_airlines`; ajuster destinations/dates si trop coûteux ou encore insuffisant.
+- Checks: `pytest tests/providers/test_serpapi_google_flights.py tests/test_engine.py tests/test_web.py -q`; `ruff check` fichiers Python modifiés; `pyright`; `git diff --check`.
+
+## Investigation faite (2026-07-09, derniere recherche sans bus)
+
+- Agent: Codex.
+- Correction: aucune modification code. Diagnostic SQLite: dernier run `#50` est reste `running`, avec seulement 5 statuts providers avion et 14 offres `flight`; aucun statut `distribusion`, `comparabus`, `flixbus_openapi` ou `flixbus` n'a ete cree pour ce run.
+- Cause racine: la recherche a ete interrompue ou le process serveur a disparu apres les providers avion, avant la section bus du moteur. Le run termine precedent `#49` contenait bien 26 offres bus via `comparabus`.
+- Restrictions/blocages: FlixBus OpenAPI reste non actionnable sans lien reservation explicite; FlixBus RapidAPI reste bloque `429/403`; Distribusion desactive faute de credentials.
+- Pistes: relancer une recherche complete avec serveur actif; si un nouveau run reste `running`, ajouter timeout/etat d'echec propre pour les background tasks interrompues.
+- Checks: inspection SQLite `search_runs`, `provider_statuses`, `deals`; verification process `uvicorn/travel_scrapping/python` absent.
+
+## Investigation faite (2026-07-09, ecart EasyJet Google Flights)
+
+- Agent: Codex.
+- Correction: aucune modification code. Diagnostic: Google UI peut afficher EasyJet car elle explore une liste large de destinations/dates. Le run local `#50` a interroge `google_flights_deals` via SerpApi et des probes `google_flights` bornes a 8 destinations x 3 paires de dates; les probes cibles n'ont retourne que `DUB` comme exemple et 5 offres rejetees budget.
+- Cause racine: le provider principal `google_flights_deals` n'est pas exhaustif et le provider cible ne fait pas de destination libre; il ne force pas `include_airlines=U2`. Les anciennes offres EasyJet locales venaient bien de SerpApi Deals, mais sur d'autres runs/dates/destinations.
+- Restrictions/blocages: pas de provider direct EasyJet: endpoints publics EasyJet proteges Akamai `403/503`, contournement anti-bot hors perimetre. Ne pas inventer une offre EasyJet absente du payload provider.
+- Pistes: ajouter une tranche de probes cibles EasyJet `include_airlines=U2` sur destinations candidates Google/BDD/config et dates exactes, avec limite de cout explicite.
+- Checks: inspection URL utilisateur non exploitable via navigateur outil; inspection SQLite historique EasyJet; lecture config destinations et provider SerpApi cible.
+
 ## Corrections faites (2026-07-09, subdivision SCSS)
 
 - Agent: Codex.

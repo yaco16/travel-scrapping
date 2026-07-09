@@ -604,9 +604,9 @@ def test_deal_detail_page_uses_polished_layout_without_raw_warnings(tmp_path, mo
             source="comparabus",
             transport_mode="bus",
             provider="comparabus",
-            origin_airport="NCE",
+            origin_airport="336",
             destination_airport="9",
-            destination_city="Paris",
+            destination_city="Milan",
             outbound_date=date(2026, 7, 8),
             return_date=date(2026, 7, 11),
             nights=3,
@@ -619,6 +619,14 @@ def test_deal_detail_page_uses_polished_layout_without_raw_warnings(tmp_path, mo
             actionable=True,
             confidence="medium",
             warnings_json='["cached or indicative fare; verify before booking"]',
+            raw_payload_z=zlib.compress(
+                json.dumps(
+                    {
+                        "departure_station_name": "Aéroport de Nice - Terminal 1",
+                        "arrival_station_name": "Milan (San Donato M3)",
+                    }
+                ).encode()
+            ),
             fetched_at=now,
         )
         session.add(deal)
@@ -634,7 +642,9 @@ def test_deal_detail_page_uses_polished_layout_without_raw_warnings(tmp_path, mo
     assert "Ouvrir réservation" in response.text
     assert "Prix indicatif : à vérifier avant réservation" in response.text
     assert "cached or indicative fare" not in response.text
-    assert "Paris" in response.text
+    assert "Milan" in response.text
+    assert "Aéroport de Nice - Terminal 1 → Milan (San Donato M3)" in response.text
+    assert "336 → 9" not in response.text
     assert "9 inconnu" not in response.text
 
 

@@ -17,7 +17,7 @@ Travel Scrapping MVP local:
 - Provider `comparabus` ajoute pour bus: stops/routes/prices publics ComparaBUS + redirect explicite, confiance `medium`, aucune offre si stop ambigu ou lien absent.
 - Provider `distribusion` socle bus + train Europe, desactive par defaut.
 - `engine.py` `build_providers()` = SerpApi Deals + Ryanair + Amadeus + Travelpayouts + SerpApi Google Flights ciblé + Playwright. Mode bus = Comparabus + FlixBus Open API + FlixBus RapidAPI.
-- `config.py` : `ryanair_enabled`, `amadeus_client_id`, `amadeus_client_secret`, `serpapi_targeted_enabled`, `serpapi_targeted_max_destinations`, `serpapi_targeted_max_date_pairs`, `ground_max_date_pairs`, `flixbus_openapi_enabled`, `comparabus_enabled`, `comparabus_base_url`.
+- `config.py` : `ryanair_enabled`, `amadeus_client_id`, `amadeus_client_secret`, `serpapi_targeted_enabled`, `serpapi_targeted_max_destinations`, `serpapi_targeted_max_date_pairs`, `serpapi_airline_targeted_enabled`, `serpapi_airline_targeted_codes`, `serpapi_airline_targeted_max_destinations`, `serpapi_airline_targeted_max_date_pairs`, `ground_max_date_pairs`, `flixbus_openapi_enabled`, `comparabus_enabled`, `comparabus_base_url`.
 - Diagnostics `/results` affichent tous les providers avec compteurs, HTTP status, params publics.
 - Diagnostics fournisseurs exposent `distribusion` meme desactive, sans secret.
 - SQLite reste compatible: `transport_mode` string, anciennes lignes conservees.
@@ -32,5 +32,5 @@ Smoke reel Deals strict NCE relance le 2026-07-09 apres correction SerpApi du pr
 - Etape 02 - Abandonnee : Amadeus non configure sur decision utilisateur (API bientot retiree). Travelpayouts configure a la place (token + marker, deep link Aviasales construit cote code) : offres reelles actionables en live (cf. TODO.md).
 - Etape 03 - FlixBus Open API : trouver un lien réservation contractuel dans payload/API ou basculer sur fournisseur bus contractuel. Garder 0 offre tant que lien réservation explicite absent.
 - Etape 04 - Demander acces demo/sandbox `Distribusion` et documentation/API contractuelle.
-- Etape 05 - Surveiller cout/resultats des probes ciblés `serpapi_google_flights_targeted`; ajuster `SERPAPI_TARGETED_MAX_DESTINATIONS` et `SERPAPI_TARGETED_MAX_DATE_PAIRS` si trop couteux.
+- Etape 05 - Surveiller cout/resultats des probes ciblés `serpapi_google_flights_targeted` et `serpapi_google_flights_airlines`; ajuster `SERPAPI_TARGETED_MAX_DESTINATIONS`, `SERPAPI_TARGETED_MAX_DATE_PAIRS`, `SERPAPI_AIRLINE_TARGETED_MAX_DESTINATIONS` et `SERPAPI_AIRLINE_TARGETED_MAX_DATE_PAIRS` si trop couteux.
 - Etape 06 - Conversion devise: garder affichage/persistance en EUR. Si une source renvoie une autre devise, ajouter une source de taux fiable ou une table de taux explicite avant d'accepter l'offre.

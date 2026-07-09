@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 {% if deal %}
+{% set bus_route = deal|bus_route_details %}
+{% set route_origin = (bus_route.origin_station if bus_route else none) or deal.origin_airport %}
+{% set route_destination = (bus_route.destination_station if bus_route else none) or deal.destination_airport %}
 <section class="deal-detail">
   <div class="deal-detail__copy">
     <div class="badge-row">
@@ -10,7 +13,7 @@
     </div>
     <p class="eyebrow">Détail offre</p>
     <h1 class="deal-detail__title">{{ deal.destination_display_name or deal|destination_display }}{% if deal.destination_country %}<span class="deal-card__country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h1>
-    <p class="hero__subtitle">{{ deal.origin_airport }} → {{ deal.destination_airport }} · {{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits</p>
+    <p class="hero__subtitle">{{ route_origin }} → {{ route_destination }} · {{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits</p>
   </div>
   <aside class="deal-detail__price">
     <span class="deal-detail__price-label">Prix total</span>

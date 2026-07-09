@@ -7,6 +7,7 @@
 | `serpapi_google_flights_deals` | `primary` | Recherche destination libre via Google Flight Deals. Provider avion principal. Appel strict `google_flights_deals`, parser `deals` uniquement. | Oui si clé présente et clé `deals` exploitable. |
 | `ryanair` | `primary` | Vols low-cost via `farfnd/v4/roundTripFares`, sans clé. `limit` API plafonné à 20 (voir section dédiée) : au-delà, HTTP 400 et 0 offre. | Oui si activé, pas d'heures de vol (dates seules). |
 | `serpapi_google_flights_targeted` | `detail_probe` | Probes ciblés destination+dates via `google_flights`, bornés par configuration, avec `deep_search=true`. Complète Deals sans relâcher les critères. | Oui si clé présente et résultat actionnable. |
+| `serpapi_google_flights_airlines` | `detail_probe` | Probes ciblés destination+dates via `google_flights` avec `include_airlines=U2` puis `include_airlines=V7` par défaut. Vise EasyJet/Volotea sans provider direct ni scraping anti-bot. | Oui si clé présente et résultat actionnable. |
 | `travelpayouts` | `optional` | Prix indicatifs/cachés. Désactivé si `TRAVELPAYOUTS_MARKER` absent. | Non si marker absent ou aucune offre actionnable. |
 | `comparabus` | `optional` | Bus via API publique ComparaBUS: stops, routes, prix, redirect affilié. | Oui seulement si stop non ambigu, route bus, prix et lien redirect explicite. |
 | `flixbus` / `flixbus_rapidapi` | `optional` | Bus via RapidAPI. Désactivé par défaut côté UX si `403/429` ou clé/quota inexploitable. | Non si rate-limit/abonnement bloque. |
@@ -59,7 +60,7 @@ Smoke réel 2026-07-08 (curl, `User-Agent` navigateur standard, aucun contournem
 
 Constat: contrairement à Ryanair (API `farfnd` publique, sans clé, répond HTTP 200 direct), EasyJet et Wizz Air protègent leur surface HTTP publique par anti-bot (Akamai côté EasyJet, rate-limit + neutralisation JS côté Wizz Air) dès la première requête non-navigateur. Un provider direct de ce type nécessiterait un contournement anti-bot (headless browser, fingerprinting, rotation IP), explicitement hors périmètre (cf. `playwright_probe`: "squelette sûr de probe, sans contournement anti-bot") et contraire à la règle projet de ne pas construire de scraping fragile/instable sur bases non contractuelles.
 
-Décision: ne pas intégrer de provider direct EasyJet/Wizz Air. Seule voie restante pour ces compagnies: apparition en tant que résultat dans `serpapi_google_flights_deals` (déjà observé pour Volotea et Wizz Air dans d'anciens payloads debug du 2026-06-20, jamais pour EasyJet) ou usage ciblé de `serpapi_google_flights` (`detail_probe`) avec le paramètre `include_airlines` (codes IATA `W6` Wizz Air, `U2` EasyJet) sur une destination précise déjà connue — non implémenté aujourd'hui.
+Décision: ne pas intégrer de provider direct EasyJet/Wizz Air. EasyJet et Volotea passent par `serpapi_google_flights_airlines`, qui interroge `google_flights` avec `include_airlines=U2` et `include_airlines=V7` sur des destinations/dates bornées. Wizz Air reste non ciblé par défaut.
 
 ## Bus et train Europe
 
