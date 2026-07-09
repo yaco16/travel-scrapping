@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="page-hero">
+<section class="hero">
   <div>
     <p class="eyebrow">Résultats</p>
-    <h1>{% if run %}Run #{{ run.id }}{% else %}Aucun run{% endif %}</h1>
-    {% if run_config %}<p class="hero-subtitle">{{ run_config.summary }}</p>{% endif %}
+    <h1 class="hero__title">{% if run %}Run #{{ run.id }}{% else %}Aucun run{% endif %}</h1>
+    {% if run_config %}<p class="hero__subtitle">{{ run_config.summary }}</p>{% endif %}
   </div>
-  {% if run %}<strong class="status-badge {{ 'pending-blink' if run.status == 'pending' else '' }}">{{ run.status }}</strong>{% endif %}
+  {% if run %}<strong class="status-badge {{ 'status-badge--pending' if run.status == 'pending' else '' }}">{{ run.status }}</strong>{% endif %}
 </section>
 
 <div id="live-region"
@@ -19,21 +19,21 @@
   {%- endif %}>
 {% if run %}
 <section class="metric-grid">
-  <div class="metric-card"><span>Offres acceptées</span><strong>{{ run.accepted_count }}</strong></div>
-  <div class="metric-card"><span>Rejetées</span><strong>{{ run.rejected_count }}</strong></div>
-  <div class="metric-card"><span>Meilleur prix</span><strong>{{ run.cheapest_price_eur|price_display }}</strong></div>
-  <div class="metric-card"><span>Providers actifs</span><strong>{{ active_provider_count }}</strong></div>
+  <div class="metric-card"><span class="metric-card__label">Offres acceptées</span><strong class="metric-card__value">{{ run.accepted_count }}</strong></div>
+  <div class="metric-card"><span class="metric-card__label">Rejetées</span><strong class="metric-card__value">{{ run.rejected_count }}</strong></div>
+  <div class="metric-card"><span class="metric-card__label">Meilleur prix</span><strong class="metric-card__value">{{ run.cheapest_price_eur|price_display }}</strong></div>
+  <div class="metric-card"><span class="metric-card__label">Providers actifs</span><strong class="metric-card__value">{{ active_provider_count }}</strong></div>
 </section>
 <p class="sr-status">Statut : <strong>{{ run.status }}</strong></p>
 {% if run.warnings_json and run.warnings_json != "[]" %}
 {% for warning in run.warnings_json|warnings_display %}
-<p class="warning compact">Erreur : {{ warning }}</p>
+<p class="alert alert--compact">Erreur : {{ warning }}</p>
 {% endfor %}
 {% endif %}
 {% endif %}
 
 <section class="panel">
-  <div class="section-title">
+  <div class="section-header">
     <div>
       <p class="eyebrow">Suivi</p>
       <h2>Pipeline</h2>
@@ -41,7 +41,7 @@
   </div>
   <ol class="status-list">
   {% for step in processing_steps %}
-    <li><span>{{ step }}</span>{% if run and run.status == "pending" %}<span class="step-state pending-blink">pending</span>{% endif %}</li>
+    <li class="status-list__item"><span>{{ step }}</span>{% if run and run.status == "pending" %}<span class="status-list__state status-list__state--pending">pending</span>{% endif %}</li>
   {% endfor %}
   </ol>
 </section>
@@ -55,7 +55,7 @@
 
 {% if diagnostics.google_flight_deals %}
 <details class="panel details-panel">
-  <summary>Comparaison Google Flight Deals</summary>
+  <summary class="details-panel__summary">Comparaison Google Flight Deals</summary>
   {% if diagnostics.google_flight_deals.wrong_endpoint %}
   <p>La recherche ne peut pas reproduire Google Flight Deals : endpoint différent.</p>
   {% endif %}
@@ -70,12 +70,12 @@
   {% endif %}
   <p>Raison principale de rejet : {{ diagnostics.google_flight_deals.main_rejection_reason or "Non disponible" }}</p>
   <p>Exemples destinations reçues : {{ diagnostics.google_flight_deals.destination_examples|join(", ") }}</p>
-  <div class="table-wrapper">
-    <table>
-      <tr><th>Paramètre</th><th>Valeur</th></tr>
+  <div class="table-shell">
+    <table class="data-table">
+      <tr><th class="data-table__header">Paramètre</th><th class="data-table__header">Valeur</th></tr>
       {% for key, value in diagnostics.google_flight_deals.params.items() %}
       {% if key not in ["payload_diagnostic", "diagnostic"] %}
-      <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+      <tr><td class="data-table__cell">{{ key }}</td><td class="data-table__cell">{{ value }}</td></tr>
       {% endif %}
       {% endfor %}
     </table>
@@ -84,42 +84,42 @@
 {% endif %}
 
 <details class="panel details-panel" open>
-  <summary>Diagnostics fournisseurs</summary>
+  <summary class="details-panel__summary">Diagnostics fournisseurs</summary>
   <div class="provider-list">
     {% for item in provider_groups.active %}
-    <span class="provider-pill ok">{{ item.name }} · {{ item.role }}</span>
+    <span class="provider-pill provider-pill--ok">{{ item.name }} · {{ item.role }}</span>
     {% endfor %}
     {% for item in provider_groups.disabled %}
-    <span class="provider-pill muted">{{ item.name }} · désactivé</span>
+    <span class="provider-pill provider-pill--muted">{{ item.name }} · désactivé</span>
     {% endfor %}
     {% for item in provider_groups.advanced %}
-    <span class="provider-pill muted">{{ item.name }} · diagnostic avancé</span>
+    <span class="provider-pill provider-pill--muted">{{ item.name }} · diagnostic avancé</span>
     {% endfor %}
   </div>
   <h3>Providers désactivés</h3>
-  <div class="table-wrapper">
-    <table>
-      <tr><th>Provider</th><th>Rôle</th><th>Activé</th><th>Clé</th><th>Appel</th><th>HTTP/Erreur</th><th>Brut</th><th>Normalisées</th><th>Acceptées</th><th>Rejetées</th><th>Raison</th></tr>
+  <div class="table-shell">
+    <table class="data-table">
+      <tr><th class="data-table__header">Provider</th><th class="data-table__header">Rôle</th><th class="data-table__header">Activé</th><th class="data-table__header">Clé</th><th class="data-table__header">Appel</th><th class="data-table__header">HTTP/Erreur</th><th class="data-table__header">Brut</th><th class="data-table__header">Normalisées</th><th class="data-table__header">Acceptées</th><th class="data-table__header">Rejetées</th><th class="data-table__header">Raison</th></tr>
       {% for item in provider_rows %}
       {% set status = item.status %}
       <tr>
-        <td>{{ item.name }}</td>
-        <td>{{ item.role }}</td>
-        <td>{{ status.enabled|yes_no }}</td>
-        <td>{{ status.key_present|yes_no }}</td>
-        <td>{{ status.attempted|yes_no }}</td>
-        <td>{% if status.http_status %}{{ status.http_status }}{% elif status.error %}{{ status.error }}{% elif status.warnings_json and status.warnings_json != "[]" %}{{ status.warnings_json|warnings_display|join(", ") }}{% else %}{{ status|provider_status_display }}{% endif %}</td>
-        <td>{{ status.raw_count or 0 }}</td>
-        <td>{{ status.normalized_count or 0 }}</td>
-        <td>{{ status.accepted_count or 0 }}</td>
-        <td>{{ status.rejected_count or 0 }}</td>
-        <td>{{ status.main_rejection_reason or "Non disponible" }}</td>
+        <td class="data-table__cell">{{ item.name }}</td>
+        <td class="data-table__cell">{{ item.role }}</td>
+        <td class="data-table__cell">{{ status.enabled|yes_no }}</td>
+        <td class="data-table__cell">{{ status.key_present|yes_no }}</td>
+        <td class="data-table__cell">{{ status.attempted|yes_no }}</td>
+        <td class="data-table__cell">{% if status.http_status %}{{ status.http_status }}{% elif status.error %}{{ status.error }}{% elif status.warnings_json and status.warnings_json != "[]" %}{{ status.warnings_json|warnings_display|join(", ") }}{% else %}{{ status|provider_status_display }}{% endif %}</td>
+        <td class="data-table__cell">{{ status.raw_count or 0 }}</td>
+        <td class="data-table__cell">{{ status.normalized_count or 0 }}</td>
+        <td class="data-table__cell">{{ status.accepted_count or 0 }}</td>
+        <td class="data-table__cell">{{ status.rejected_count or 0 }}</td>
+        <td class="data-table__cell">{{ status.main_rejection_reason or "Non disponible" }}</td>
       </tr>
       {% endfor %}
     </table>
   </div>
   {% if diagnostics.travelpayouts_marker_present == false %}
-  <p class="warning compact">Travelpayouts : endpoints nécessitant un marker désactivés, marker absent.</p>
+  <p class="alert alert--compact">Travelpayouts : endpoints nécessitant un marker désactivés, marker absent.</p>
   {% endif %}
 </details>
 {% endblock %}

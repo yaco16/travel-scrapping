@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Historique</h1>
-<div class="table-wrapper">
-  <table>
-    <tr><th>ID</th><th>Date</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th></tr>
+<div class="table-shell">
+  <table class="data-table">
+    <tr><th class="data-table__header">ID</th><th class="data-table__header">Date</th><th class="data-table__header">Statut</th><th class="data-table__header">Acceptés</th><th class="data-table__header">Rejetés</th><th class="data-table__header">Meilleur prix</th></tr>
     {% for run in runs %}
-    <tr><td>{{ run.id }}</td><td>{{ run.started_at|date_time }}</td><td>{{ run.status }}</td><td>{{ run.accepted_count }}</td><td>{{ run.rejected_count }}</td><td>{{ run.cheapest_price_eur|price_display }}</td></tr>
+    <tr><td class="data-table__cell">{{ run.id }}</td><td class="data-table__cell">{{ run.started_at|date_time }}</td><td class="data-table__cell">{{ run.status }}</td><td class="data-table__cell">{{ run.accepted_count }}</td><td class="data-table__cell">{{ run.rejected_count }}</td><td class="data-table__cell">{{ run.cheapest_price_eur|price_display }}</td></tr>
     {% endfor %}
   </table>
 </div>

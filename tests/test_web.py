@@ -49,7 +49,7 @@ def test_main_menu_hides_sqlite(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert '<a href="/sqlite">SQLite</a>' not in response.text
     assert '<a href="/search">Recherche</a>' not in response.text
-    assert '<a href="/history">Historique</a>' in response.text
+    assert '<a class="app-nav__link" href="/history">Historique</a>' in response.text
 
 
 def test_home_keeps_search_form_and_hides_provider_setup_warnings(tmp_path, monkeypatch):
@@ -62,7 +62,7 @@ def test_home_keeps_search_form_and_hides_provider_setup_warnings(tmp_path, monk
     response = client.get("/")
 
     assert response.status_code == 200
-    assert '<form action="/run" method="post" class="form-grid" data-run-form>' in response.text
+    assert '<form action="/run" method="post" class="search-form" data-run-form>' in response.text
     assert "Travelpayouts désactivé : TRAVELPAYOUTS_MARKER manquant" not in response.text
     assert "AMADEUS_CLIENT_ID/SECRET missing; Amadeus provider skipped." not in response.text
 
@@ -394,7 +394,7 @@ def test_results_operator_moves_to_bottom_right_pill_without_provider_ok(tmp_pat
 
     assert response.status_code == 200
     assert "Provider OK" not in response.text
-    assert '<span class="operator-pill">FlixBus</span>' in response.text
+    assert '<span class="deal-card__operator">FlixBus</span>' in response.text
     assert "02/07/26 - 06/07/26" in response.text
     assert "35,00 €" in response.text
     assert "Nice Aéroport" in response.text
@@ -424,11 +424,11 @@ def test_results_show_pending_status_and_auto_refresh(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert f"Run #{run_id}" in response.text
-    assert '<strong class="status-badge pending-blink">pending</strong>' in response.text
+    assert '<strong class="status-badge status-badge--pending">pending</strong>' in response.text
     assert "Étape 01 — Configuration chargée" in response.text
     assert "Étape 02 — Recherche lancée" in response.text
     assert "step-spinner" not in response.text
-    assert '<span class="step-state pending-blink">pending</span>' in response.text
+    assert '<span class="status-list__state status-list__state--pending">pending</span>' in response.text
     assert 'hx-trigger="every 2s"' in response.text
     assert '<meta http-equiv="refresh"' not in response.text
 
@@ -563,7 +563,7 @@ def test_results_htmx_request_returns_full_page_for_hx_select(tmp_path, monkeypa
     response = client.get(f"/results?run_id={run_id}&mode=bus", headers={"HX-Request": "true"})
 
     assert response.status_code == 200
-    assert "page-hero" in response.text
+    assert "hero" in response.text
     assert 'id="results-offers-panel"' in response.text
 
 
@@ -629,7 +629,7 @@ def test_deal_detail_page_uses_polished_layout_without_raw_warnings(tmp_path, mo
     response = client.get(f"/deal/{deal_id}")
 
     assert response.status_code == 200
-    assert "deal-detail-hero" in response.text
+    assert "deal-detail" in response.text
     assert "Prix total" in response.text
     assert "Ouvrir réservation" in response.text
     assert "Prix indicatif : à vérifier avant réservation" in response.text
@@ -658,10 +658,21 @@ def test_history_shows_run_start_date_between_id_and_status(tmp_path, monkeypatc
     response = client.get("/history")
 
     assert response.status_code == 200
-    header = "<th>ID</th><th>Date</th><th>Statut</th><th>Acceptés</th><th>Rejetés</th><th>Meilleur prix</th>"
+    header = (
+        '<th class="data-table__header">ID</th>'
+        '<th class="data-table__header">Date</th>'
+        '<th class="data-table__header">Statut</th>'
+        '<th class="data-table__header">Acceptés</th>'
+        '<th class="data-table__header">Rejetés</th>'
+        '<th class="data-table__header">Meilleur prix</th>'
+    )
     row = (
-        "<td>1</td><td>20/06/26 09:56</td><td>completed</td>"
-        "<td>2</td><td>3</td><td>88,90 €</td>"
+        '<td class="data-table__cell">1</td>'
+        '<td class="data-table__cell">20/06/26 09:56</td>'
+        '<td class="data-table__cell">completed</td>'
+        '<td class="data-table__cell">2</td>'
+        '<td class="data-table__cell">3</td>'
+        '<td class="data-table__cell">88,90 €</td>'
     )
     assert header in response.text
     assert row in response.text
@@ -1099,9 +1110,9 @@ def test_results_diagnostics_show_serpapi_attempted_status_when_zero_raw(tmp_pat
     assert response.status_code == 200
     assert "SerpApi appelé, HTTP 200, payload sans deal exploitable." in response.text
     assert "Aucune offre exploitable trouvée. 0 offre reçue des fournisseurs actifs." not in response.text
-    assert "<td>serpapi</td>" in response.text
-    assert "<td>200</td>" in response.text
-    assert "<td>oui</td>" in response.text
+    assert '<td class="data-table__cell">serpapi</td>' in response.text
+    assert '<td class="data-table__cell">200</td>' in response.text
+    assert '<td class="data-table__cell">oui</td>' in response.text
     assert "La recherche ne peut pas reproduire Google Flight Deals : endpoint différent." in response.text
 
 
@@ -1229,8 +1240,8 @@ def test_results_show_google_flight_deals_strict_payload_diagnostic(tmp_path, mo
 
     assert response.status_code == 200
     assert "Payload : status=Success · clés=search_metadata, deals" in response.text
-    assert "<td>trip_length</td><td>1,7</td>" in response.text
-    assert "<td>max_price</td><td>150</td>" in response.text
+    assert '<td class="data-table__cell">trip_length</td><td class="data-table__cell">1,7</td>' in response.text
+    assert '<td class="data-table__cell">max_price</td><td class="data-table__cell">150</td>' in response.text
     assert "api_key" not in response.text
 
 
@@ -1318,8 +1329,8 @@ def test_results_use_run_snapshot_and_show_cheapest_first(tmp_path, monkeypatch)
     assert "44,00 €" in response.text
     assert "2 offres affichées sur 2 acceptées" in response.text
     assert "Meilleur prix" in response.text
-    assert 'class="deal-card best"' in response.text
-    assert 'class="badge best-badge">Meilleur prix</span>' in response.text
+    assert 'class="deal-card deal-card--best"' in response.text
+    assert 'class="badge badge--best">Meilleur prix</span>' in response.text
     assert "Budget max 150 EUR · 1-7 nuits" in response.text
     assert "Budget max 100 EUR · 3-5 nuits" not in response.text
     assert response.text.index("44,00 €") < response.text.index("71,00 €")
@@ -1407,5 +1418,11 @@ def test_home_rerun_preserves_run_modes(tmp_path, monkeypatch):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert '<input name="modes" type="checkbox" value="bus" data-mode-option checked>' in response.text
-    assert '<input name="modes" type="checkbox" value="train" data-mode-option checked>' in response.text
+    assert (
+        '<input class="mode-picker__input" name="modes" type="checkbox" '
+        'value="bus" data-mode-option checked>'
+    ) in response.text
+    assert (
+        '<input class="mode-picker__input" name="modes" type="checkbox" '
+        'value="train" data-mode-option checked>'
+    ) in response.text

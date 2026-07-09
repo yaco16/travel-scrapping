@@ -1,28 +1,28 @@
 <div id="results-offers-panel">
 {% if run %}
 <nav class="tabs" aria-label="Filtres résultats">
-  <a class="{{ 'active' if mode == 'all' else '' }}"
+  <a class="tabs__link {{ 'tabs__link--active' if mode == 'all' else '' }}"
      href="/results?run_id={{ run.id }}#results-offers-panel"
      hx-get="/results?run_id={{ run.id }}"
      hx-target="#results-offers-panel"
      hx-select="#results-offers-panel"
      hx-swap="outerHTML"
      hx-push-url="/results?run_id={{ run.id }}">Tous</a>
-  <a class="{{ 'active' if mode == 'flight' else '' }}"
+  <a class="tabs__link {{ 'tabs__link--active' if mode == 'flight' else '' }}"
      href="/results?run_id={{ run.id }}&mode=flight#results-offers-panel"
      hx-get="/results?run_id={{ run.id }}&mode=flight"
      hx-target="#results-offers-panel"
      hx-select="#results-offers-panel"
      hx-swap="outerHTML"
      hx-push-url="/results?run_id={{ run.id }}&mode=flight">Avion</a>
-  <a class="{{ 'active' if mode == 'bus' else '' }}"
+  <a class="tabs__link {{ 'tabs__link--active' if mode == 'bus' else '' }}"
      href="/results?run_id={{ run.id }}&mode=bus#results-offers-panel"
      hx-get="/results?run_id={{ run.id }}&mode=bus"
      hx-target="#results-offers-panel"
      hx-select="#results-offers-panel"
      hx-swap="outerHTML"
      hx-push-url="/results?run_id={{ run.id }}&mode=bus">Bus</a>
-  <a class="{{ 'active' if mode == 'train' else '' }}"
+  <a class="tabs__link {{ 'tabs__link--active' if mode == 'train' else '' }}"
      href="/results?run_id={{ run.id }}&mode=train#results-offers-panel"
      hx-get="/results?run_id={{ run.id }}&mode=train"
      hx-target="#results-offers-panel"
@@ -33,7 +33,7 @@
 {% endif %}
 
 <section class="panel">
-  <div class="section-title">
+  <div class="section-header">
     <div>
       <p class="eyebrow">Liste</p>
       <h2>Offres</h2>
@@ -41,29 +41,29 @@
     {% if run %}<span class="count-pill">{{ accepted_display_count }} offres affichées sur {{ accepted_total_count }} acceptées</span>{% endif %}
   </div>
   {% if deals %}
-  <div class="results-list">
+  <div class="offers">
     {% for deal in deals %}
-    <article class="deal-card {{ 'best' if deal.total_price_eur == best_price else '' }}">
-      <div class="deal-main">
-        <div class="deal-info">
+    <article class="deal-card {{ 'deal-card--best' if deal.total_price_eur == best_price else '' }}">
+      <div class="deal-card__main">
+        <div class="deal-card__info">
           <div class="badge-row">
             <span class="badge">{{ deal.transport_mode|mode_display }}</span>
-            <span class="badge muted">{{ deal.confidence }}</span>
-            {% if deal.total_price_eur == best_price %}<span class="badge best-badge">Meilleur prix</span>{% endif %}
+            <span class="badge badge--muted">{{ deal.confidence }}</span>
+            {% if deal.total_price_eur == best_price %}<span class="badge badge--best">Meilleur prix</span>{% endif %}
           </div>
-          <h3><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a>{% if deal.destination_country %}<span class="destination-country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h3>
-          <p>{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits</p>
+          <h3 class="deal-card__title"><a href="/deal/{{ deal.id }}">{{ deal.destination_display_name or deal|destination_display }}</a>{% if deal.destination_country %}<span class="deal-card__country">, {{ deal.destination_country|country_display }}</span>{% endif %}</h3>
+          <p class="deal-card__meta">{{ deal.outbound_date|short_date }} - {{ deal.return_date|short_date }} · {{ deal.nights }} nuits</p>
         </div>
         {% include "_deal_timeline.html" %}
-        <div class="price-block">
-          <strong>{{ deal.total_price_eur|price_display }}</strong>
-          <span>{{ deal.stops_count if deal.stops_count is not none else 0 }} escale(s)</span>
+        <div class="deal-card__price">
+          <strong class="deal-card__price-value">{{ deal.total_price_eur|price_display }}</strong>
+          <span class="deal-card__price-note">{{ deal.stops_count if deal.stops_count is not none else 0 }} escale(s)</span>
         </div>
       </div>
-      <div class="deal-footer">
+      <div class="deal-card__footer">
         <span>Durée {{ deal.duration_minutes|duration_display }}</span>
         <a href="{{ deal.booking_url }}" rel="noreferrer">Voir l’offre</a>
-        <span class="operator-pill">{{ deal|operator_display }}</span>
+        <span class="deal-card__operator">{{ deal|operator_display }}</span>
       </div>
     </article>
     {% endfor %}

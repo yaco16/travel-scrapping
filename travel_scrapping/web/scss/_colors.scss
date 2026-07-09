@@ -1,0 +1,47 @@
+$light-colors: (
+  bg: #f5f7f8,
+  surface: #ffffff,
+  text: #1b2430,
+  muted: #657280,
+  border: #dce3e8,
+  primary: #0f766e,
+  primary-strong: #115e59,
+  accent: #16a34a,
+  success-bg: #f0fdf4,
+  success-border: #22c55e,
+  warning-bg: #fff7ed,
+  warning-border: #d97706,
+  input-bg: #ffffff,
+  nav-bg: #17313a,
+  nav-text: #eef6f7,
+  table-bg: #ffffff,
+  neutral-bg: #eef2f4,
+  neutral-text: #5b6874,
+);
+
+$dark-colors: (
+  bg: #101719,
+  surface: #172125,
+  text: #edf5f3,
+  muted: #a8b7b6,
+  border: #2d3d42,
+  primary: #14b8a6,
+  primary-strong: #5eead4,
+  accent: #22c55e,
+  success-bg: #123126,
+  success-border: #22c55e,
+  warning-bg: #2f2118,
+  warning-border: #f59e0b,
+  input-bg: #101719,
+  nav-bg: #0d171a,
+  nav-text: #edf5f3,
+  table-bg: #172125,
+  neutral-bg: #203236,
+  neutral-text: #c9d5d3,
+);
+
+@mixin color-vars($colors) {
+  @each $name, $value in $colors {
+    --color-#{$name}: #{$value};
+  }
+}

@@ -16,15 +16,15 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-  <nav>
-    <div class="nav-links">
-      <a href="/">Dashboard</a>
-      <a href="/results">Résultats</a>
-      <a href="/history">Historique</a>
+  <nav class="app-nav">
+    <div class="app-nav__links">
+      <a class="app-nav__link" href="/">Dashboard</a>
+      <a class="app-nav__link" href="/results">Résultats</a>
+      <a class="app-nav__link" href="/history">Historique</a>
     </div>
-    <button type="button" class="theme-toggle" data-theme-toggle aria-label="Changer le thème">Mode sombre</button>
+    <button type="button" class="app-nav__theme-toggle" data-theme-toggle aria-label="Changer le thème">Mode sombre</button>
   </nav>
-  <main>{% block content %}{% endblock %}</main>
+  <main class="app-shell">{% block content %}{% endblock %}</main>
   <script>
     const themeToggle = document.querySelector("[data-theme-toggle]");
     const setTheme = (theme) => {

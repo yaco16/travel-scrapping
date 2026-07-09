@@ -1,5 +1,23 @@
 # TODO
 
+## Corrections faites (2026-07-09, refonte SCSS BEM)
+
+- Agent: Codex.
+- Correction: CSS remplace par sources SCSS dans `travel_scrapping/web/scss/`, compilation vers `travel_scrapping/web/static/style.css`, classes templates converties en BEM anglais, couleurs centralisees dans `_colors.scss`, contraintes frontend ajoutees dans `AGENTS.md`.
+- Cause racine: dette UI/CSS avec feuille unique non sourcee SCSS, conventions de classes non imposees et couleurs dispersees dans le CSS genere.
+- Restrictions/blocages: `sass` absent localement; compilation faite via wrapper RTK apres lecture infrastructure Pi. Aucun provider/API modifie.
+- Pistes: garder `style.css` comme artefact compile uniquement; toute prochaine retouche visuelle doit partir de `travel_scrapping/web/scss/` puis recompiler.
+- Checks: compilation Sass; pytest cible templates/web; ruff sur tests modifies; pyright; diff check; controle absence CSS inline.
+
+## Investigation faite (2026-07-09, controle Claude CLI via tmux)
+
+- Agent: Codex.
+- Correction: validation du controle Claude CLI via `tmux`: lancement session detachee, capture ecran, envoi de prompt avec `send-keys`. Skill globale ajoutee dans `/home/yaco/.codex/skills/claude-connect/SKILL.md` et exposee dans ce projet via symlink `.claude/skills/claude-connect`.
+- Cause racine: Claude CLI interactif necessite un pseudo-terminal persistant; dans le sandbox Codex, le serveur tmux ne persiste pas entre commandes, donc les commandes tmux doivent etre lancees hors sandbox quand Codex pilote Claude.
+- Restrictions/blocages: controle tmux fonctionne, mais Claude a repondu `Your organization has disabled Claude subscription access for Claude Code`; auth/acces Claude Code a regler separement via acces org ou cle API Anthropic. Secrets non affiches.
+- Pistes: utiliser la skill `claude-connect` pour demarrer `claude-control`, envoyer prompts, capturer l'ecran et surveiller les permissions avant validation.
+- Checks: `claude --help`, `claude auth status`, `tmux -V`, `tmux new-session`, `tmux send-keys`, `tmux capture-pane`; sessions de test nettoyees.
+
 ## Corrections faites (2026-07-09, audit criteres provider tous transports)
 
 - Agent: Codex.

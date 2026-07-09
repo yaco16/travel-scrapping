@@ -80,6 +80,15 @@ Repondre avec : analyse, verdict, blocage/restriction identifie, prochaine tranc
 - UI utilisateur en francais ; noms fichiers, URLs et classes CSS en anglais.
 - Resultats historiques : filtrer avant affichage, ne pas faire confiance aux anciennes lignes stockees.
 
+## Frontend CSS
+
+- Source de style: SCSS uniquement dans `travel_scrapping/web/scss/`.
+- CSS servi: `travel_scrapping/web/static/style.css` genere depuis SCSS, ne pas l'editer a la main.
+- Apres chaque modification SCSS, recompiler avec `rtk npx sass --no-source-map travel_scrapping/web/scss/style.scss travel_scrapping/web/static/style.css`.
+- Couleurs: mutualiser dans `travel_scrapping/web/scss/_colors.scss`.
+- Classes: BEM en anglais (`block`, `block__element`, `block--modifier`), aucun nom francais.
+- Interdit: CSS inline (`style=""`, balises `<style>`), doublons de definitions CSS pour le meme composant.
+
 ## Validation
 
 Pendant dev : lancer uniquement tests/checks lies aux fichiers modifies.

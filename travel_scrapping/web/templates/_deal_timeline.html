@@ -1,45 +1,45 @@
 {% set bus_route = deal|bus_route_details %}
-<div class="deal-route">
-<div class="deal-timeline">
-  <div class="deal-timeline-point">
-    <strong>{{ deal.outbound_departure_at|clock_display or "Horaire non communiqué" }}</strong>
-    <span>{{ bus_route.origin_station if bus_route else "Départ" }}</span>
+<div class="route-timeline">
+<div class="route-timeline__lineup">
+  <div class="route-timeline__point">
+    <strong class="route-timeline__time">{{ deal.outbound_departure_at|clock_display or "Horaire non communiqué" }}</strong>
+    <span class="route-timeline__place">{{ bus_route.origin_station if bus_route else "Départ" }}</span>
   </div>
-  <div class="deal-timeline-track">
-    <span class="deal-timeline-line"></span>
+  <div class="route-timeline__track">
+    <span class="route-timeline__bar"></span>
     {% if deal.stops_count %}
-    <span class="deal-timeline-stop" title="Durée d'escale non communiquée">{{ deal.stops_count }} escale{{ 's' if deal.stops_count > 1 else '' }}</span>
+    <span class="route-timeline__stop" title="Durée d'escale non communiquée">{{ deal.stops_count }} escale{{ 's' if deal.stops_count > 1 else '' }}</span>
     {% endif %}
   </div>
-  <div class="deal-timeline-point">
-    <strong>
+  <div class="route-timeline__point">
+    <strong class="route-timeline__time">
       {{ deal.outbound_arrival_at|clock_display or "Horaire non communiqué" }}
       {%- if deal.outbound_arrival_at and deal.outbound_departure_at and deal.outbound_arrival_at.date() != deal.outbound_departure_at.date() %}
-      <span class="deal-timeline-badge">+1</span>
+      <span class="route-timeline__day-badge">+1</span>
       {%- endif %}
     </strong>
-    <span>{{ bus_route.destination_station if bus_route else "Arrivée" }}</span>
+    <span class="route-timeline__place">{{ bus_route.destination_station if bus_route else "Arrivée" }}</span>
   </div>
 </div>
 {% if bus_route and (bus_route.stopovers or bus_route.unavailable_stopovers) %}
-<div class="bus-stopover-list" aria-label="Détails des escales">
+<div class="stopover-list" aria-label="Détails des escales">
   {% for stopover in bus_route.stopovers %}
-  <div class="bus-stopover-row">
-    <span class="bus-stopover-index">Escale {{ stopover.index }}</span>
-    <strong>{{ stopover.station or "Arrêt non communiqué" }}</strong>
-    <span>Arrivée {{ stopover.arrival_at|clock_display or "?" }}</span>
-    <span>Départ {{ stopover.departure_at|clock_display or "?" }}</span>
-    <span>Attente {{ stopover.duration_minutes|duration_display or "?" }}</span>
-    <span>Avant {{ stopover.inbound_duration_minutes|duration_display or "?" }}</span>
-    <span>Après {{ stopover.outbound_duration_minutes|duration_display or "?" }}</span>
+  <div class="stopover-list__item">
+    <span class="stopover-list__index">Escale {{ stopover.index }}</span>
+    <strong class="stopover-list__station">{{ stopover.station or "Arrêt non communiqué" }}</strong>
+    <span class="stopover-list__text">Arrivée {{ stopover.arrival_at|clock_display or "?" }}</span>
+    <span class="stopover-list__text">Départ {{ stopover.departure_at|clock_display or "?" }}</span>
+    <span class="stopover-list__text">Attente {{ stopover.duration_minutes|duration_display or "?" }}</span>
+    <span class="stopover-list__text">Avant {{ stopover.inbound_duration_minutes|duration_display or "?" }}</span>
+    <span class="stopover-list__text">Après {{ stopover.outbound_duration_minutes|duration_display or "?" }}</span>
   </div>
   {% endfor %}
   {% if bus_route.unavailable_stopovers %}
     {% for _ in range(bus_route.unavailable_stopovers) %}
-  <div class="bus-stopover-row muted">
-    <span class="bus-stopover-index">Escale {{ loop.index }}</span>
-    <strong>Arrêt non communiqué</strong>
-    <span>Détails non communiqués par le fournisseur</span>
+  <div class="stopover-list__item stopover-list__item--muted">
+    <span class="stopover-list__index">Escale {{ loop.index }}</span>
+    <strong class="stopover-list__station">Arrêt non communiqué</strong>
+    <span class="stopover-list__text">Détails non communiqués par le fournisseur</span>
   </div>
     {% endfor %}
   {% endif %}

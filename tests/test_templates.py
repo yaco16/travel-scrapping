@@ -33,7 +33,7 @@ def test_key_ui_elements_exist_in_templates():
     home, _, _ = templates.env.loader.get_source(templates.env, "home.html")
     base, _, _ = templates.env.loader.get_source(templates.env, "base.html")
 
-    assert "page-hero" in results
+    assert "hero" in results
     assert "metric-card" in results
     assert "offres affichées sur" in offers
     assert "Meilleur prix" in offers
@@ -41,7 +41,7 @@ def test_key_ui_elements_exist_in_templates():
     assert 'hx-target="#results-offers-panel"' in offers
     assert "mode=train" in offers
     assert "step-spinner" not in results
-    assert "pending-blink" in results
+    assert "status-badge--pending" in results
     assert "Dernier run" in home
     assert "Mode sombre" in base
     assert "data-theme-toggle" in base
@@ -50,12 +50,12 @@ def test_key_ui_elements_exist_in_templates():
     assert 'value="bus"' in home
     assert 'value="train"' in home
     assert 'value="all"' in home
-    assert "operator-pill" in offers
+    assert "deal-card__operator" in offers
     assert "Provider {{ deal.provider_status|provider_status_display }}" not in offers
 
 
 def test_dark_theme_css_uses_global_theme_attribute():
     css = Path("travel_scrapping/web/static/style.css").read_text()
-    assert '[data-theme="dark"]' in css
-    assert "--bg:" in css
-    assert "--surface:" in css
+    assert "[data-theme=dark]" in css
+    assert "--color-bg:" in css
+    assert "--color-surface:" in css
