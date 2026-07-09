@@ -1,5 +1,33 @@
 # TODO
 
+## Corrections faites (2026-07-09, horizon SerpApi Deals)
+
+- Agent: Codex.
+- Correction: la date max par défaut n'est plus fixée à `2026-08-31`; elle devient un horizon glissant de 180 jours (`DEFAULT_SEARCH_HORIZON_DAYS`). Le smoke CLI `google-flight-deals-smoke` reprend ce défaut quand `--depart-to` n'est pas fourni.
+- Cause racine: après correction SerpApi, `google_flights_deals` renvoie 30 offres, mais l'ancienne borne locale `2026-08-31` rejetait 26 offres avec `departure after search end date`; avec `depart_to=2026-12-31`, 25 offres passent les filtres.
+- Restrictions/blocages: `SVQ`, `STN`, `FCO` restent absentes de `google_flights_deals`; elles ressortent seulement via probes ciblés `google_flights` (`SVQ` 1, `STN` 1, `FCO` 6), qui nécessitent destination + dates.
+- Pistes: ajouter une tranche de probes ciblés `serpapi_google_flights` sur destinations pertinentes déjà identifiées, sans remplacer Deals comme provider destination libre.
+- Checks: smokes live SerpApi Deals baseline/budget/escales/nuits/date max; probes live `google-flight-deals-probes`; tests ciblés + ruff + pyright + `git diff --check`.
+
+## Corrections faites (2026-07-09, suivi multi-agents)
+
+- Agent: Codex.
+- Correction: `AGENTS.md` impose maintenant un debut de requete base sur les sources de verite, un format de suivi commun Claude/Codex, et une trace explicite des causes racines, restrictions, blocages, pistes et checks.
+- Cause racine: le suivi existait deja dans `TODO.md`, `ROADMAP.md` et `docs/tasks/`, mais les entrees n'imposaient pas toujours le nom de l'agent ni les restrictions decouvertes; reprise inter-agent moins fiable.
+- Restrictions/blocages: ne pas multiplier les fichiers de suivi; garder `ROADMAP.md` pour etat stable, `TODO.md` pour journal/action immediates, `docs/tasks/active|archive` pour tranches.
+- Pistes: convertir progressivement les nouvelles entrees au format commun; ne pas reecrire tout l'historique sauf besoin lie a une reprise.
+- Checks: `git diff --check`.
+
+## Investigation faite (2026-07-09, SerpApi Google Flight Deals)
+
+- SerpApi a corrigé le problème `Fully Empty` sur `departure_id`. Smoke réel relancé sur `google_flights_deals` depuis NCE: HTTP 200, `search_metadata.status=Success`, clé `deals` présente, 30 offres brutes, 30 normalisées, 4 acceptées par les filtres locaux (`CAG`, `DJE`, `LBA`, `VCE` observés). Les cibles historiques `SVQ`, `STN`, `FCO` restent absentes sur ce run.
+- Aucun changement de provider requis: le parser reste strict sur la clé `deals`; si SerpApi renvoie de nouveau un payload vide, l'app doit garder 0 offre plutôt qu'inventer.
+
+## Investigation faite (2026-07-08, provider direct EasyJet/Wizz Air)
+
+- Question: existe-t-il une API interne EasyJet/Wizz Air exploitable sans clé comme `farfnd` pour Ryanair. Smoke réel curl (cf. `docs/providers.md`, section "EasyJet / Wizz Air (API interne)") : Wizz Air renvoie HTTP 429 immédiat sur son endpoint de recherche et sert une page avec neutralisation JS anti-bot ; EasyJet renvoie HTTP 403/503 (Akamai) dès la première requête, y compris sur d'anciens endpoints legacy. Contrairement à Ryanair, aucune des deux ne répond correctement à une requête HTTP simple.
+- Décision: pas de provider direct EasyJet/Wizz Air, contournement anti-bot hors périmètre projet. Alternative documentée: `serpapi_google_flights` (`detail_probe`) avec `include_airlines=W6`/`U2` par destination précise, non implémenté.
+
 ## Corrections faites (2026-07-08, Travelpayouts marker + deep link Aviasales)
 
 - Utilisateur a obtenu `TRAVELPAYOUTS_TOKEN` et `TRAVELPAYOUTS_MARKER` (compte Travelpayouts, projet "newsletter") et les a renseignés dans `.env`. `INCLUDE_INDICATIVE=true` ajouté aussi (permettait d'activer le provider en mode dégradé avant l'obtention du marker).

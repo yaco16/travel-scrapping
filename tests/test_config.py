@@ -1,13 +1,13 @@
-from datetime import date
+from datetime import date, timedelta
 
-from travel_scrapping.config import Settings, mask_secret, safe_settings_dict
+from travel_scrapping.config import DEFAULT_SEARCH_HORIZON_DAYS, Settings, mask_secret, safe_settings_dict
 
 
 def test_config_defaults_and_masking():
     settings = Settings(_env_file=None, serpapi_api_key="abcdef", distribusion_api_key="placeholder-value")
     assert settings.origin_airport == "NCE"
-    assert settings.search_end_date == date(2026, 8, 31)
-    assert settings.effective_search_end_date == date(2026, 8, 31)
+    assert settings.search_end_date == date.today() + timedelta(days=DEFAULT_SEARCH_HORIZON_DAYS)
+    assert settings.effective_search_end_date == settings.search_end_date
     assert settings.email_to == "kwad16@gmail.com"
     assert mask_secret("abcdef") == "ab****ef"
     assert safe_settings_dict(settings)["serpapi_api_key"] == "ab****ef"

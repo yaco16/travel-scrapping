@@ -227,7 +227,14 @@ async def test_google_flight_deals_provider_search_uses_strict_deals_params(tmp_
             },
         )
     )
-    provider = SerpApiGoogleFlightDealsProvider(Settings(_env_file=None, serpapi_api_key="secret"))
+    provider = SerpApiGoogleFlightDealsProvider(
+        Settings(
+            _env_file=None,
+            serpapi_api_key="secret",
+            search_start_date=date(2026, 7, 1),
+            search_end_date=date(2026, 8, 31),
+        )
+    )
     deals = await provider.search([], [], limit=10)
     sent = route.calls[0].request.url.params
     assert sent["engine"] == "google_flights_deals"

@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from functools import lru_cache
 from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+DEFAULT_SEARCH_HORIZON_DAYS = 180
+
+
+def default_search_end_date() -> date:
+    return date.today() + timedelta(days=DEFAULT_SEARCH_HORIZON_DAYS)
 
 
 class Settings(BaseSettings):
@@ -21,7 +28,7 @@ class Settings(BaseSettings):
     default_locale: str = "fr-FR"
     default_market: str = "FR"
     search_start_date: date | None = Field(default_factory=date.today)
-    search_end_date: date = date(2026, 8, 31)
+    search_end_date: date = Field(default_factory=default_search_end_date)
     date_to: date | None = None
     min_nights: int = 1
     max_nights: int = 7

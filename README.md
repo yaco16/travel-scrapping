@@ -2,7 +2,7 @@
 
 FastAPI + HTMX dashboard for very cheap actionable flight and bus deals from Nice (NCE).
 
-Defaults: one adult, personal item only, no checked/cabin bag, 3-5 nights, under 100 EUR total, from today to 2026-08-31, max 5h air time per direction, max 3h layover, no overnight airport stay.
+Defaults: one adult, personal item only, no checked/cabin bag, 3-5 nights, under 100 EUR total, from today to 180 days ahead, max 5h air time per direction, max 3h layover, no overnight airport stay.
 
 ## Setup
 

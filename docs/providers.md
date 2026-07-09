@@ -48,6 +48,19 @@ Limites: accès partenaire non garanti, conditions commerciales, endpoints dispo
 
 Utilité projet: intéressant si accès officiel obtenu; non prioritaire sans partenariat.
 
+### EasyJet / Wizz Air (API interne)
+
+Question testée: existe-t-il, comme pour Ryanair (`farfnd/v4/roundTripFares`, sans clé, HTTP 200 direct), une API interne EasyJet/Wizz Air exploitable sans clé ni contournement anti-bot.
+
+Smoke réel 2026-07-08 (curl, `User-Agent` navigateur standard, aucun contournement anti-bot) :
+
+- Wizz Air : `GET https://be.wizzair.com/7.4.0/Api/search/search` -> HTTP 429 immédiat (rate-limit/anti-bot dès la première requête). `GET https://be.wizzair.com/7.4.0/Api/asset/basic` -> HTTP 404 (version d'API `7.4.0` obsolète ou endpoint inexistant). Page principale `wizzair.com/en-gb` -> HTTP 200 mais HTML livré avec un script de neutralisation de balises `<script>` et détection de bot navigateur (`ua.match(/Googlebot|Bingbot|.../)`), signe d'une protection anti-bot active (type Akamai/PerimeterX) qui bloque le rendu JS normal et donc l'observation des vrais appels API du site.
+- EasyJet : `GET https://www.easyjet.com/en` -> HTTP 403 direct. `GET https://www.easyjet.com/api/routepricing/v1/routes` -> HTTP 403. `GET https://www.easyjet.com/ejsi/Areas/Website/Functions/RouteSearch.asmx/GetRoutes` -> HTTP 503, `server: AkamaiNetStorage`. Confirme une protection Akamai active sur le site public, y compris sur d'anciens endpoints `.asmx` legacy.
+
+Constat: contrairement à Ryanair (API `farfnd` publique, sans clé, répond HTTP 200 direct), EasyJet et Wizz Air protègent leur surface HTTP publique par anti-bot (Akamai côté EasyJet, rate-limit + neutralisation JS côté Wizz Air) dès la première requête non-navigateur. Un provider direct de ce type nécessiterait un contournement anti-bot (headless browser, fingerprinting, rotation IP), explicitement hors périmètre (cf. `playwright_probe`: "squelette sûr de probe, sans contournement anti-bot") et contraire à la règle projet de ne pas construire de scraping fragile/instable sur bases non contractuelles.
+
+Décision: ne pas intégrer de provider direct EasyJet/Wizz Air. Seule voie restante pour ces compagnies: apparition en tant que résultat dans `serpapi_google_flights_deals` (déjà observé pour Volotea et Wizz Air dans d'anciens payloads debug du 2026-06-20, jamais pour EasyJet) ou usage ciblé de `serpapi_google_flights` (`detail_probe`) avec le paramètre `include_airlines` (codes IATA `W6` Wizz Air, `U2` EasyJet) sur une destination précise déjà connue — non implémenté aujourd'hui.
+
 ## Bus et train Europe
 
 Le socle technique bus + train existe, mais aucun appel réel Distribusion n'est intégré maintenant.
@@ -116,7 +129,7 @@ Utile pour le rail, surtout comme standard d'échange. Pour ce MVP, à privilég
 
 ## Google Travel Explore
 
-`google_travel_explore` a été testé car l'UI Google Travel Explore affiche des offres visibles alors que `google_flights_deals` ne renvoie plus de clé `deals` pour NCE été 2026.
+`google_travel_explore` a été testé car l'UI Google Travel Explore affichait des offres visibles alors que `google_flights_deals` ne renvoyait plus de clé `deals` pour NCE été 2026.
 
 Smoke réel SerpApi, endpoint `google_travel_explore`, variantes datées `2026-07-16/2026-07-23`, `2026-07-21/2026-07-28`, `2026-08-28/2026-08-31`, `2026-07-01/2026-07-08`: HTTP 200, `search_metadata.status=Success`, top-level keys `search_metadata`, `search_parameters`, `search_information`, `error`, aucune clé `destinations` ou `flights`, 0 brut, SVQ/STN/FCO absents. Erreur SerpApi: `Empty results for departure_id: "NCE".`
 
@@ -145,7 +158,7 @@ Contrat strict:
 - `engine=google_flights_deals`
 - `departure_id=NCE`
 - `type=1`
-- `outbound_date=2026-07-01,2026-08-31`
+- `outbound_date=<date début effective>,<date fin effective>` avec début = `max(search_start_date, date courante)` et fin = horizon de recherche configurable (180 jours par défaut)
 - `trip_length=1,7`
 - `max_price=150`
 - `stops=2`
@@ -157,6 +170,19 @@ Contrat strict:
 
 Parsing: clé `deals` uniquement. Si le payload est vide ou sans clé `deals`, aucune offre n'est inventée et aucune observation prix n'est persistée.
 
+Smoke réel 2026-07-09 après correction SerpApi du problème `Fully Empty` sur `departure_id`: HTTP 200, `search_metadata.status=Success`, top-level keys `search_metadata`, `search_parameters`, `departure_informations`, `deals`; `raw_count=30`, `normalized_count=30`, `accepted_count=4`, `rejected_count=26`.
+
+Exemples acceptés observés depuis NCE avec fenêtre effective `2026-07-09,2026-08-31`, 1-7 nuits, <=150 EUR, 1 escale max:
+
+- Cagliari (`CAG`) 13/08/26 -> 20/08/26, 69,00 EUR.
+- Djerba (`DJE`) 31/08/26 -> 07/09/26, 149,00 EUR.
+- Leeds (`LBA`) 24/07/26 -> 31/07/26, 120,00 EUR.
+- Venise (`VCE`) 30/07/26 -> 06/08/26, 60,00 EUR.
+
+Investigation complémentaire 2026-07-09: SerpApi Deals renvoie souvent des offres hors de l'ancienne fin fixe `2026-08-31`. Avec la même requête mais `depart_to=2026-12-31`, le smoke passe de 4 à 25 offres acceptées, sans relâcher budget, nuits ni escales. Le défaut app est donc passé à un horizon glissant de 180 jours.
+
+Les anciennes cibles `SVQ`, `STN`, `FCO` restent absentes de `google_flights_deals`, mais les probes ciblés `google_flights` retrouvent des vols: `SVQ` 1 résultat, `STN` 1 résultat, `FCO` 6 résultats. Piste: utiliser `serpapi_google_flights` comme probe ciblé sur destinations/dates déjà identifiées, pas comme provider destination libre.
+
 ## Décision
 
-Priorité actuelle: clarifier avec SerpApi pourquoi `google_flights_deals` retourne HTTP 200 `Success` sans clé `deals` sur NCE été 2026 alors que Google UI affiche des offres. Aucune nouvelle API bus/train implémentée dans cette tranche.
+Décision actuelle: garder `serpapi_google_flights_deals` comme provider avion principal strict. Le problème externe SerpApi `Fully Empty` sur certains `departure_id` est corrigé côté fournisseur pour NCE; continuer à ne parser que `deals` et à ne rien inventer si le payload redevient vide. Aucune nouvelle API bus/train implémentée dans cette tranche.

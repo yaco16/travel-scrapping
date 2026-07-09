@@ -299,17 +299,18 @@ def serpapi_smoke_cmd(
 def google_flight_deals_smoke_cmd(
     origin: str = typer.Option("NCE", "--origin"),
     depart_from: str = typer.Option("2026-07-01", "--depart-from"),
-    depart_to: str = typer.Option("2026-08-31", "--depart-to"),
+    depart_to: str | None = typer.Option(None, "--depart-to"),
     min_nights: int = typer.Option(1, "--min-nights"),
     max_nights: int = typer.Option(7, "--max-nights"),
     max_price: float = typer.Option(150, "--max-price"),
     max_stops: int = typer.Option(1, "--max-stops"),
 ) -> None:
-    settings = get_settings().model_copy(
+    base_settings = get_settings()
+    settings = base_settings.model_copy(
         update={
             "origin_airport": origin,
             "search_start_date": date.fromisoformat(depart_from),
-            "search_end_date": date.fromisoformat(depart_to),
+            "search_end_date": date.fromisoformat(depart_to) if depart_to else base_settings.effective_search_end_date,
             "min_nights": min_nights,
             "max_nights": max_nights,
             "max_roundtrip_price_eur": max_price,
